@@ -1,0 +1,8 @@
+{
+  "name": "Thalexa",
+  "description": "Multi-platform Web3 verification, escrow, and wallet dApp powered by Sui blockchain.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
