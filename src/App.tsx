@@ -11,7 +11,7 @@ import { Shield, Wallet, Lock, LayoutDashboard, ArrowRight } from 'lucide-react'
 import { Logo } from './components/Logo';
 
 function AppContent() {
-  const { user, loading, signIn } = useAuth();
+  const { user, loading, dbReady, signIn } = useAuth();
   const [activeTab, setActiveTab] = useState('wallet');
 
   if (loading) {
@@ -20,6 +20,55 @@ function AppContent() {
         <div className="flex flex-col items-center gap-4">
           <Logo className="w-12 h-12 text-primary animate-pulse" />
           <p className="text-gray-400 font-medium animate-pulse">Loading Thalexa...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-2xl glass p-8 rounded-[2.5rem] border-red-500/30">
+          <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Shield className="text-red-500" size={32} />
+          </div>
+          <h2 className="text-3xl font-display font-bold mb-4">Database Setup Required</h2>
+          <p className="text-gray-400 mb-8">
+            The application is connected to Supabase, but the <span className="text-white font-bold">profiles</span> table is missing. 
+            Please run the following SQL in your <span className="text-white font-bold">Supabase SQL Editor</span> to fix this:
+          </p>
+          
+          <div className="bg-black/50 p-6 rounded-2xl text-left font-mono text-xs text-primary overflow-x-auto mb-8 border border-border">
+            <pre>{`-- Create profiles table
+CREATE TABLE profiles (
+  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  email TEXT,
+  wallet_address TEXT,
+  role TEXT DEFAULT 'user',
+  subscription_tier TEXT DEFAULT 'starter',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Create policies
+CREATE POLICY "Public profiles are viewable by everyone." ON profiles
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own profile." ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile." ON profiles
+  FOR UPDATE USING (auth.uid() = id);`}</pre>
+          </div>
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="btn-primary px-8 py-3"
+          >
+            I've run the SQL, Refresh App
+          </button>
         </div>
       </div>
     );
@@ -62,17 +111,31 @@ function AppContent() {
             </div>
           </div>
 
-          <button 
-            onClick={signIn}
-            className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-2 group"
-          >
-            Get Started with zkLogin
-            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-          </button>
+          <div className="space-y-3">
+            <button 
+              onClick={() => signIn('google')}
+              className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-3 group"
+            >
+              <img src="https://www.gstatic.com/firebase/anonymous-scan/google.svg" className="w-5 h-5" alt="" />
+              Continue with Google
+              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button 
+              onClick={() => signIn('facebook')}
+              className="w-full bg-[#1877F2] hover:bg-[#166fe5] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              Continue with Facebook
+            </button>
+          </div>
           
-          <p className="mt-6 text-xs text-gray-500">
-            By continuing, you agree to Thalexa's Terms of Service and Privacy Policy.
-          </p>
+          <div className="mt-8 p-4 glass rounded-2xl border-primary/20">
+            <p className="text-[10px] text-primary uppercase font-bold tracking-widest mb-2">Setup Required</p>
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              If you see "provider not enabled", go to your <span className="text-white font-bold">Supabase Dashboard &gt; Auth &gt; Providers</span> and toggle Google/Facebook to <span className="text-white font-bold">ON</span>.
+            </p>
+          </div>
         </div>
       </div>
     );

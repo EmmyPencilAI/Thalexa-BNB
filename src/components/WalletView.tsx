@@ -75,9 +75,17 @@ export default function WalletView() {
       <div className="glass p-4 rounded-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-          <span className="text-sm font-mono text-gray-400">{user?.wallet_address || '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'}</span>
+          <span className="text-sm font-mono text-gray-400">{user?.wallet_address}</span>
         </div>
-        <button className="text-primary text-sm font-bold hover:underline">Copy</button>
+        <button 
+          onClick={() => {
+            navigator.clipboard.writeText(user?.wallet_address || '');
+            alert('Address copied!');
+          }}
+          className="text-primary text-sm font-bold hover:underline"
+        >
+          Copy
+        </button>
       </div>
 
       {/* Assets Grid */}
