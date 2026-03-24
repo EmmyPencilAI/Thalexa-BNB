@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #FF6B00;
+    --secondary: #10B981;
+    --surface: #1A1B1E;
+    --background: #0F1012;
+    --border: rgba(255, 255, 255, 0.1);
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  
+  .input-field {
+    @apply w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all;
+  }
+  
+  .btn-primary {
+    @apply bg-primary text-black font-bold rounded-2xl px-6 py-4 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50;
+  }
+}
+
+/* Custom Animations */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.screen.active {
+  animation: slideUp 0.3s ease-out;
+}

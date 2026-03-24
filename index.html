@@ -1,13 +1,457 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thalexa | Web3 Verification & Escrow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #00f2ff;
+            --primary-dark: #00c8d4;
+            --bg: #050505;
+            --card: #121212;
+            --border: #222222;
+            --text: #ffffff;
+            --text-muted: #888888;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
 
+        .font-display { font-family: 'Space Grotesk', sans-serif; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .screen {
+            display: none;
+            min-height: 100vh;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: black;
+            font-weight: 700;
+            border-radius: 1rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .nav-item {
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+        }
+
+        .progress-bar-custom {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 3px;
+            transition: width 0.5s ease-out;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+</head>
+<body class="max-w-md mx-auto shadow-2xl min-h-screen relative">
+
+    <div id="app">
+        <!-- Onboarding Screen -->
+        <div id="onboarding-screen" class="screen active flex flex-col items-center justify-center p-8 text-center">
+            <div class="w-24 h-24 bg-primary/20 rounded-[2rem] flex items-center justify-center mb-8 animate-pulse">
+                <i data-lucide="shield-check" class="w-12 h-12 text-primary"></i>
+            </div>
+            <h1 class="text-4xl font-display font-bold mb-4">Thalexa</h1>
+            <p class="text-gray-400 mb-12">Secure Web3 verification, escrow, and cross-border payments.</p>
+            
+            <div class="w-full space-y-4">
+                <button id="login-btn" class="w-full btn-primary py-4 flex items-center justify-center gap-3">
+                    <i data-lucide="log-in" class="w-5 h-5"></i>
+                    Sign in with zkLogin
+                </button>
+                <p class="text-[10px] text-gray-500">By continuing, you agree to our Terms of Service.</p>
+            </div>
+        </div>
+
+        <!-- Wallet Screen -->
+        <div id="wallet-screen" class="screen p-6">
+            <div class="flex justify-between items-center mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center font-bold text-black text-xs" id="user-avatar">
+                        JD
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Wallet</p>
+                        <p class="text-sm font-mono text-gray-300" id="wallet-address">0x7a...2b4e</p>
+                    </div>
+                </div>
+                <button onclick="router.navigate('settings')" class="p-2 glass rounded-xl">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="glass p-8 rounded-[2.5rem] mb-8 relative overflow-hidden">
+                <div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-3xl"></div>
+                <p class="text-xs text-gray-400 mb-2">Total Balance</p>
+                <h2 class="text-4xl font-display font-bold mb-6" id="total-balance">$12,450.00</h2>
+                
+                <div class="flex gap-4">
+                    <button onclick="router.navigate('send')" class="flex-1 py-3 glass rounded-2xl flex items-center justify-center gap-2 font-bold text-sm hover:bg-white/5 transition-all">
+                        <i data-lucide="arrow-up-right" class="w-4 h-4 text-primary"></i> Send
+                    </button>
+                    <button onclick="router.navigate('receive')" class="flex-1 py-3 glass rounded-2xl flex items-center justify-center gap-2 font-bold text-sm hover:bg-white/5 transition-all">
+                        <i data-lucide="arrow-down-left" class="w-4 h-4 text-primary"></i> Receive
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-6 mb-24">
+                <div class="flex justify-between items-center px-2">
+                    <h3 class="font-bold">Assets</h3>
+                    <button class="text-xs text-primary font-bold">See All</button>
+                </div>
+                
+                <div id="asset-list" class="space-y-4">
+                    <!-- Assets will be rendered here -->
+                </div>
+
+                <div class="glass p-6 rounded-3xl mt-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-xs font-bold uppercase tracking-widest text-gray-500">Monthly Usage</h4>
+                        <span class="text-[10px] text-primary font-bold">STARTER PLAN</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1">
+                                <span>Volume</span>
+                                <span id="volume-text">$0 / $2,000</span>
+                            </div>
+                            <div class="progress-bar-custom">
+                                <div id="volume-progress" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Send Screen -->
+        <div id="send-screen" class="screen p-6">
+            <div class="flex items-center gap-4 mb-8">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 class="text-xl font-bold">Send Assets</h2>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <label class="text-sm text-gray-400">Recipient Address</label>
+                    <div class="relative">
+                        <input type="text" id="send-to" placeholder="0x..." class="w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all font-mono text-sm">
+                        <button onclick="router.navigate('scanner')" class="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
+                            <i data-lucide="scan"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="space-y-2">
+                    <label class="text-sm text-gray-400">Amount</label>
+                    <div class="relative">
+                        <input type="number" id="send-amount" placeholder="0.00" class="w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all text-2xl font-bold">
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-500">SUI</span>
+                    </div>
+                </div>
+                
+                <button id="confirm-send" class="w-full btn-primary py-5 mt-8">
+                    Confirm Transaction
+                </button>
+            </div>
+        </div>
+
+        <!-- Receive Screen -->
+        <div id="receive-screen" class="screen p-6">
+            <div class="flex items-center gap-4 mb-8">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 class="text-xl font-bold">Receive</h2>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center py-12">
+                <div class="bg-white p-6 rounded-[2.5rem] mb-8 shadow-[0_0_50px_rgba(0,242,255,0.2)]">
+                    <div id="qrcode" class="w-48 h-48"></div>
+                </div>
+                
+                <p class="text-sm text-gray-400 mb-4">Your Wallet Address</p>
+                <div class="glass p-4 rounded-2xl w-full flex items-center justify-between gap-4">
+                    <code class="text-xs font-mono text-primary break-all" id="full-address">0x7a8c...2b4e9f</code>
+                    <button onclick="app.copyAddress()" class="p-2 hover:bg-white/5 rounded-lg">
+                        <i data-lucide="copy" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanner Screen -->
+        <div id="scanner-screen" class="screen bg-black">
+            <div class="absolute top-8 left-8 z-10">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center h-screen p-8 text-center">
+                <div class="w-64 h-64 border-2 border-primary rounded-3xl relative mb-8">
+                    <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -translate-x-1 -translate-y-1 rounded-tl-lg"></div>
+                    <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary translate-x-1 -translate-y-1 rounded-tr-lg"></div>
+                    <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -translate-x-1 translate-y-1 rounded-bl-lg"></div>
+                    <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary translate-x-1 translate-y-1 rounded-br-lg"></div>
+                    
+                    <div class="w-full h-1 bg-primary/50 absolute top-0 animate-[scan_2s_linear_infinite]"></div>
+                </div>
+                <p class="text-primary font-bold">Scanning for QR Code...</p>
+                <p class="text-xs text-gray-500 mt-2">Align the code within the frame to scan</p>
+            </div>
+        </div>
+
+        <!-- Escrow Screen -->
+        <div id="escrow-screen" class="screen p-6">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-bold">Escrow Services</h2>
+                <button onclick="router.navigate('create-escrow')" class="p-2 glass rounded-xl text-primary">
+                    <i data-lucide="plus"></i>
+                </button>
+            </div>
+            
+            <div class="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
+                <button class="px-4 py-2 bg-primary text-black rounded-full text-xs font-bold whitespace-nowrap">All Active</button>
+                <button class="px-4 py-2 glass rounded-full text-xs font-bold whitespace-nowrap">Pending</button>
+                <button class="px-4 py-2 glass rounded-full text-xs font-bold whitespace-nowrap">Completed</button>
+                <button class="px-4 py-2 glass rounded-full text-xs font-bold whitespace-nowrap">Disputed</button>
+            </div>
+
+            <div id="escrow-list" class="space-y-4 mb-24">
+                <!-- Escrow items will be rendered here -->
+            </div>
+        </div>
+
+        <!-- Verification Screen -->
+        <div id="verification-screen" class="screen p-6">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-bold">Verification</h2>
+                <button onclick="router.navigate('scanner')" class="p-2 glass rounded-xl">
+                    <i data-lucide="scan"></i>
+                </button>
+            </div>
+            
+            <div class="glass p-8 rounded-[2.5rem] mb-8 text-center">
+                <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="check-circle" class="w-8 h-8 text-primary"></i>
+                </div>
+                <h3 class="font-bold mb-2">Verify Product Authenticity</h3>
+                <p class="text-xs text-gray-500 mb-6">Scan Thalexa-enabled NFC or QR tags to verify on-chain provenance.</p>
+                <button onclick="router.navigate('scanner')" class="w-full py-3 btn-primary text-sm">Start Verification</button>
+            </div>
+
+            <h3 class="font-bold mb-4 px-2">Register New Product</h3>
+            <form id="register-form" class="space-y-4 mb-24">
+                <div class="glass p-6 rounded-3xl space-y-4">
+                    <input type="text" placeholder="Product Name" class="w-full bg-transparent border-b border-border py-2 outline-none focus:border-primary transition-all text-sm">
+                    <input type="text" placeholder="Serial Number" class="w-full bg-transparent border-b border-border py-2 outline-none focus:border-primary transition-all text-sm">
+                    <button type="submit" class="w-full py-3 glass rounded-xl text-xs font-bold hover:bg-primary hover:text-black transition-all">Register on Sui</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Create Escrow Screen -->
+        <div id="create-escrow-screen" class="screen p-6">
+            <div class="flex items-center gap-4 mb-8">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 class="text-xl font-bold">New Escrow</h2>
+            </div>
+            
+            <form id="escrow-form" class="space-y-6">
+                <div class="space-y-2">
+                    <label class="text-sm text-gray-400">Recipient Address</label>
+                    <input type="text" id="escrow-to" placeholder="0x..." class="w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all font-mono text-sm">
+                </div>
+                
+                <div class="space-y-2">
+                    <label class="text-sm text-gray-400">Amount (SUI)</label>
+                    <input type="number" id="escrow-amount" placeholder="0.00" class="w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all text-2xl font-bold">
+                </div>
+                
+                <div class="space-y-2">
+                    <label class="text-sm text-gray-400">Description / Terms</label>
+                    <textarea id="escrow-terms" rows="4" placeholder="Enter transaction terms..." class="w-full p-4 glass rounded-2xl outline-none border border-transparent focus:border-primary transition-all resize-none"></textarea>
+                </div>
+                
+                <button type="submit" class="w-full btn-primary py-5 mt-8">
+                    Create Escrow
+                </button>
+            </form>
+        </div>
+
+        <!-- Subscription Screen -->
+        <div id="subscription-screen" class="screen p-6">
+            <div class="flex items-center gap-4 mb-8">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 class="text-xl font-bold">Subscription</h2>
+            </div>
+            
+            <div class="glass p-8 rounded-[2.5rem] mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase tracking-widest font-bold">Current Plan</p>
+                        <h3 class="text-2xl font-display font-bold text-primary">Starter</h3>
+                    </div>
+                    <div class="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold">ACTIVE</div>
+                </div>
+                
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span>Monthly Volume</span>
+                            <span class="font-bold" id="sub-volume-text">$0 / $2,000</span>
+                        </div>
+                        <div class="progress-bar-custom">
+                            <div id="sub-volume-progress" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span>Product Registrations</span>
+                            <span class="font-bold" id="sub-product-text">0 / 10</span>
+                        </div>
+                        <div class="progress-bar-custom">
+                            <div id="sub-product-progress" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3 class="font-bold mb-4 px-2">Upgrade Plans</h3>
+            <div class="space-y-4">
+                <div class="glass p-6 rounded-3xl border border-primary/20">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold">Pro Plan</h4>
+                        <span class="text-primary font-bold">$19/mo</span>
+                    </div>
+                    <ul class="text-xs text-gray-400 space-y-2 mb-6">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-primary"></i> $50,000 Monthly Volume</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-primary"></i> 500 Product Registrations</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-primary"></i> Priority Support</li>
+                    </ul>
+                    <button class="w-full py-3 glass rounded-xl font-bold hover:bg-primary hover:text-black transition-all">Upgrade Now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen p-6">
+            <div class="flex items-center gap-4 mb-8">
+                <button onclick="router.back()" class="p-2 glass rounded-xl">
+                    <i data-lucide="arrow-left"></i>
+                </button>
+                <h2 class="text-xl font-bold">Settings</h2>
+            </div>
+            
+            <div class="space-y-2">
+                <div class="glass rounded-3xl overflow-hidden">
+                    <button class="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-all">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="user" class="text-gray-400"></i>
+                            <span class="font-medium">Profile Details</span>
+                        </div>
+                        <i data-lucide="chevron-right" class="text-gray-600"></i>
+                    </button>
+                    <button class="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-all border-t border-border" onclick="router.navigate('subscription')">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="credit-card" class="text-gray-400"></i>
+                            <span class="font-medium">Billing & Subscription</span>
+                        </div>
+                        <i data-lucide="chevron-right" class="text-gray-600"></i>
+                    </button>
+                    <button class="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-all border-t border-border">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="shield" class="text-gray-400"></i>
+                            <span class="font-medium">Security & Privacy</span>
+                        </div>
+                        <i data-lucide="chevron-right" class="text-gray-600"></i>
+                    </button>
+                </div>
+                
+                <div class="glass rounded-3xl overflow-hidden mt-4">
+                    <button id="logout-btn" class="w-full p-5 flex items-center gap-4 text-red-500 hover:bg-red-500/5 transition-all">
+                        <i data-lucide="log-out"></i>
+                        <span class="font-medium">Sign Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Bar -->
+        <nav id="nav-bar" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass border-t border-white/5 px-8 py-4 flex justify-between items-center z-50 rounded-t-[2.5rem] hidden">
+            <button onclick="router.navigate('wallet')" class="nav-item flex flex-col items-center gap-1" data-route="wallet">
+                <i data-lucide="wallet" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold">Wallet</span>
+            </button>
+            <button onclick="router.navigate('escrow')" class="nav-item flex flex-col items-center gap-1" data-route="escrow">
+                <i data-lucide="lock" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold">Escrow</span>
+            </button>
+            <button onclick="router.navigate('verification')" class="nav-item flex flex-col items-center gap-1" data-route="verification">
+                <i data-lucide="shield-check" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold">Verify</span>
+            </button>
+        </nav>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
