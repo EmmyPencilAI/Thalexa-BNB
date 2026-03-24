@@ -1,9 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Plus, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Plus, ExternalLink, TrendingUp, TrendingDown, X, Copy, Check } from 'lucide-react';
 import { formatAddress, formatCurrency, cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchTokenPrices, TokenPrice } from '../services/PriceService';
+import { toast } from 'sonner';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+const Modal = ({ isOpen, onClose, title, children }: any) => (
+  <AnimatePresence>
+    {isOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          className="relative w-full max-w-md bg-surface border border-border rounded-[2.5rem] overflow-hidden shadow-2xl"
+        >
+          <div className="p-6 border-b border-border flex justify-between items-center">
+            <h3 className="text-xl font-display font-bold">{title}</h3>
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-6">
+            {children}
+          </div>
+        </motion.div>
+      </div>
+    )}
+  </AnimatePresence>
+);
 
 const TokenCard = ({ symbol, name, balance, price, change }: any) => (
   <div className="glass p-5 rounded-3xl hover:border-primary/50 transition-colors cursor-pointer group">
@@ -31,6 +65,14 @@ export default function WalletView() {
   const { user } = useAuth();
   const [prices, setPrices] = useState<TokenPrice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Modal States
+  const [activeModal, setActiveModal] = useState<'send' | 'swap' | 'receive' | null>(null);
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendAddress, setSendAddress] = useState('');
+  const [swapAmount, setSwapAmount] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const loadPrices = async () => {
@@ -39,15 +81,74 @@ export default function WalletView() {
       setIsLoading(false);
     };
     loadPrices();
-    const interval = setInterval(loadPrices, 30000); // Update every 30s
+    const interval = setInterval(loadPrices, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sendAmount || !sendAddress) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setIsProcessing(true);
+    const toastId = toast.loading('Building transaction...');
+
+    try {
+      const txb = new TransactionBlock();
+      const mistAmount = BigInt(Math.floor(parseFloat(sendAmount) * 1_000_000_000));
+      const [coin] = txb.splitCoins(txb.gas, [txb.pure(mistAmount)]);
+      txb.transferObjects([coin], txb.pure(sendAddress));
+
+      console.log('Send Transaction Block:', txb);
+      
+      // Simulate signing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast.success(`Successfully sent ${sendAmount} SUI to ${formatAddress(sendAddress)}`, { id: toastId });
+      setActiveModal(null);
+      setSendAmount('');
+      setSendAddress('');
+    } catch (error: any) {
+      toast.error(`Send failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSwap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!swapAmount) return;
+
+    setIsProcessing(true);
+    const toastId = toast.loading('Finding best route...');
+
+    try {
+      // Simulate swap logic
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      toast.success(`Swapped ${swapAmount} SUI for ${(parseFloat(swapAmount) * 1.5).toFixed(2)} USDC`, { id: toastId });
+      setActiveModal(null);
+      setSwapAmount('');
+    } catch (error: any) {
+      toast.error(`Swap failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const copyAddress = () => {
+    navigator.clipboard.writeText(user?.wallet_address || '');
+    setCopied(true);
+    toast.success('Address copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const getPriceData = (symbol: string) => prices.find(p => p.symbol === symbol) || { price: 0, change24h: 0 };
 
   const tokens = [
     { symbol: 'SUI', name: 'Sui Network', balance: 1250.45 },
-    { symbol: 'cNGN', name: 'Naira Stablecoin', balance: 500000 },
+    { symbol: 'USDC', name: 'USD Coin', balance: 5000 },
     { symbol: 'ETH', name: 'Ethereum', balance: 0.45 },
     { symbol: 'BTC', name: 'Bitcoin', balance: 0.012 },
   ].map(t => ({
@@ -72,15 +173,24 @@ export default function WalletView() {
           </h2>
           
           <div className="flex flex-wrap gap-4">
-            <button className="flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-2xl font-bold shadow-lg hover:bg-gray-100 transition-all active:scale-95">
+            <button 
+              onClick={() => setActiveModal('receive')}
+              className="flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-2xl font-bold shadow-lg hover:bg-gray-100 transition-all active:scale-95"
+            >
               <Plus size={20} />
-              Buy / Deposit
+              Receive
             </button>
-            <button className="flex items-center gap-2 bg-black/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold border border-white/20 hover:bg-black/30 transition-all active:scale-95">
+            <button 
+              onClick={() => setActiveModal('send')}
+              className="flex items-center gap-2 bg-black/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold border border-white/20 hover:bg-black/30 transition-all active:scale-95"
+            >
               <ArrowUpRight size={20} />
               Send
             </button>
-            <button className="flex items-center gap-2 bg-black/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold border border-white/20 hover:bg-black/30 transition-all active:scale-95">
+            <button 
+              onClick={() => setActiveModal('swap')}
+              className="flex items-center gap-2 bg-black/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold border border-white/20 hover:bg-black/30 transition-all active:scale-95"
+            >
               <RefreshCw size={20} />
               Swap
             </button>
@@ -92,20 +202,111 @@ export default function WalletView() {
         <div className="absolute -left-20 -bottom-20 w-60 h-60 bg-black/10 rounded-full blur-2xl" />
       </div>
 
-      {/* Wallet Address */}
+      {/* Modals */}
+      <Modal isOpen={activeModal === 'send'} onClose={() => setActiveModal(null)} title="Send Assets">
+        <form onSubmit={handleSend} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400">Recipient Address</label>
+            <input 
+              type="text" 
+              placeholder="0x..." 
+              className="w-full input-field font-mono"
+              value={sendAddress}
+              onChange={(e) => setSendAddress(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400">Amount (SUI)</label>
+            <input 
+              type="number" 
+              placeholder="0.00" 
+              className="w-full input-field"
+              value={sendAmount}
+              onChange={(e) => setSendAmount(e.target.value)}
+            />
+          </div>
+          <button disabled={isProcessing} type="submit" className="w-full btn-primary py-4 mt-4">
+            {isProcessing ? 'Processing...' : 'Confirm Send'}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'swap'} onClose={() => setActiveModal(null)} title="Swap Tokens">
+        <form onSubmit={handleSwap} className="space-y-4">
+          <div className="p-4 bg-surface rounded-2xl border border-border">
+            <div className="flex justify-between mb-2">
+              <span className="text-sm text-gray-400">From</span>
+              <span className="text-sm text-gray-400">Balance: 1250.45</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="number" 
+                placeholder="0.00" 
+                className="bg-transparent border-none outline-none text-2xl font-bold w-full"
+                value={swapAmount}
+                onChange={(e) => setSwapAmount(e.target.value)}
+              />
+              <span className="font-bold">SUI</span>
+            </div>
+          </div>
+          <div className="flex justify-center -my-2 relative z-10">
+            <div className="bg-surface border border-border p-2 rounded-xl">
+              <RefreshCw size={16} className="text-primary" />
+            </div>
+          </div>
+          <div className="p-4 bg-surface rounded-2xl border border-border">
+            <div className="flex justify-between mb-2">
+              <span className="text-sm text-gray-400">To (Estimated)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="text" 
+                readOnly 
+                placeholder="0.00" 
+                className="bg-transparent border-none outline-none text-2xl font-bold w-full opacity-50"
+                value={swapAmount ? (parseFloat(swapAmount) * 1.5).toFixed(2) : ''}
+              />
+              <span className="font-bold">USDC</span>
+            </div>
+          </div>
+          <button disabled={isProcessing} type="submit" className="w-full btn-primary py-4 mt-4">
+            {isProcessing ? 'Swapping...' : 'Swap Now'}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'receive'} onClose={() => setActiveModal(null)} title="Receive Assets">
+        <div className="text-center space-y-6">
+          <div className="bg-white p-4 rounded-3xl inline-block mx-auto">
+            {/* Mock QR Code */}
+            <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
+              <Plus size={48} className="text-gray-300" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-400">Your Sui Address</p>
+            <div className="flex items-center gap-2 p-3 bg-surface rounded-xl border border-border overflow-hidden">
+              <span className="text-xs font-mono truncate flex-1">{user?.wallet_address}</span>
+              <button onClick={copyAddress} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                {copied ? <Check size={16} className="text-secondary" /> : <Copy size={16} />}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">Only send SUI or supported Sui tokens to this address.</p>
+        </div>
+      </Modal>
+
+      {/* Wallet Address (Mini) */}
       <div className="glass p-4 rounded-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-          <span className="text-sm font-mono text-gray-400">{user?.wallet_address}</span>
+          <span className="text-sm font-mono text-gray-400">{formatAddress(user?.wallet_address || '')}</span>
         </div>
         <button 
-          onClick={() => {
-            navigator.clipboard.writeText(user?.wallet_address || '');
-            alert('Address copied!');
-          }}
+          onClick={copyAddress}
           className="text-primary text-sm font-bold hover:underline"
         >
-          Copy
+          Copy Address
         </button>
       </div>
 
