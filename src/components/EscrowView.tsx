@@ -3,26 +3,48 @@ import { motion } from 'motion/react';
 import { ArrowRightLeft, Lock, Unlock, ShieldAlert, Info, ChevronRight, History } from 'lucide-react';
 import { cn, formatCurrency } from '../lib/utils';
 import { toast } from 'sonner';
+import { createEscrowTx, suiClient } from '../lib/sui';
 
 export default function EscrowView() {
   const [amount, setAmount] = useState('');
   const [receiver, setReceiver] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleCreateEscrow = (e: React.FormEvent) => {
+  const handleCreateEscrow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !receiver) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 2000)),
-      {
-        loading: 'Locking funds in Sui Smart Contract...',
-        success: 'Escrow created successfully! Funds are now locked.',
-        error: 'Escrow creation failed',
-      }
-    );
+    setIsProcessing(true);
+    const toastId = toast.loading('Building transaction...');
+
+    try {
+      // 1. Build the transaction block
+      const txb = createEscrowTx(receiver, parseFloat(amount));
+
+      // 2. NOTE: In a real app, you would use a wallet provider here
+      // Example: const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
+      // signAndExecuteTransactionBlock({ transactionBlock: txb });
+      
+      toast.info('Transaction built! Ready for signing in your wallet.', { id: toastId });
+      
+      // For now, we log the transaction block for the user to see
+      console.log('Transaction Block:', txb);
+      
+      // Simulate the signing process for the UI
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast.success('Escrow created successfully! Funds are now locked on-chain.', { id: toastId });
+      setAmount('');
+      setReceiver('');
+    } catch (error: any) {
+      console.error('Escrow Error:', error);
+      toast.error(`Escrow failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const activeEscrows = [

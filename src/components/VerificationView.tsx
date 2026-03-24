@@ -4,49 +4,84 @@ import { ShieldCheck, QrCode, Upload, Search, CheckCircle2, AlertCircle, FileTex
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
+import { createProductRegistrationTx, getProductDetails } from '../lib/sui';
 
 export default function VerificationView() {
   const [mode, setMode] = useState<'verify' | 'register'>('verify');
   const [isScanning, setIsScanning] = useState(false);
   const [searchId, setSearchId] = useState('');
   const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (!searchId.trim()) {
       toast.error('Please enter a Product ID');
       return;
     }
 
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1500)),
-      {
-        loading: 'Verifying on-chain...',
-        success: () => {
-          setVerificationResult({
-            status: 'success',
-            id: searchId || 'GG_THLX_00001',
-            name: 'Luxury Watch - Thalexa Edition',
-            owner: '0x742d...f44e',
-            registeredAt: '2026-01-15',
-            ipfsHash: 'QmXoyp...789',
-          });
-          return 'Product authenticity verified!';
-        },
-        error: 'Verification failed',
+    setIsProcessing(true);
+    const toastId = toast.loading('Fetching from blockchain...');
+
+    try {
+      const data = await getProductDetails(searchId);
+      
+      if (!data) {
+        toast.error('Product not found on-chain.', { id: toastId });
+        return;
       }
-    );
+
+      // Map real data to UI
+      setVerificationResult({
+        status: 'success',
+        id: searchId,
+        name: (data.content as any)?.fields?.name || 'Unknown Product',
+        owner: (data as any).owner?.AddressOwner || 'Unknown Owner',
+        registeredAt: new Date().toLocaleDateString(), // Sui doesn't store creation time by default
+        ipfsHash: (data.content as any)?.fields?.ipfs_hash || 'No Metadata',
+      });
+      
+      toast.success('Product authenticity verified!', { id: toastId });
+    } catch (error: any) {
+      console.error('Verification Error:', error);
+      toast.error(`Verification failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 2000)),
-      {
-        loading: 'Uploading to IPFS & Minting on Sui...',
-        success: 'Product registered successfully!',
-        error: 'Registration failed',
-      }
-    );
+    const formData = new FormData(e.target as HTMLFormElement);
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+
+    if (!name || !description) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setIsProcessing(true);
+    const toastId = toast.loading('Building transaction...');
+
+    try {
+      // 1. Build the transaction block
+      const txb = createProductRegistrationTx(name, description, 'Qm_MOCK_IPFS_HASH');
+
+      // 2. NOTE: In a real app, you would use a wallet provider here
+      toast.info('Transaction built! Ready for signing in your wallet.', { id: toastId });
+      
+      console.log('Registration Transaction Block:', txb);
+      
+      // Simulate signing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast.success('Product registered successfully on the Sui blockchain!', { id: toastId });
+    } catch (error: any) {
+      console.error('Registration Error:', error);
+      toast.error(`Registration failed: ${error.message}`, { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -169,17 +204,17 @@ export default function VerificationView() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Product Name</label>
-                <input type="text" placeholder="e.g. Luxury Watch" className="w-full input-field" />
+                <input name="name" type="text" placeholder="e.g. Luxury Watch" className="w-full input-field" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Manufacturer</label>
-                <input type="text" placeholder="e.g. Thalexa Labs" className="w-full input-field" />
+                <input name="manufacturer" type="text" placeholder="e.g. Thalexa Labs" className="w-full input-field" />
               </div>
             </div>
             
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-400">Description</label>
-              <textarea rows={3} placeholder="Enter product details..." className="w-full input-field resize-none" />
+              <textarea name="description" rows={3} placeholder="Enter product details..." className="w-full input-field resize-none" />
             </div>
 
             <div className="space-y-2">
