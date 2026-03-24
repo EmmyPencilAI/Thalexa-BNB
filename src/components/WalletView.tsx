@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Plus, ExternalLink } from 'lucide-react';
-import { formatAddress, formatCurrency } from '../lib/utils';
+import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, Plus, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatAddress, formatCurrency, cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchTokenPrices, TokenPrice } from '../services/PriceService';
 
 const TokenCard = ({ symbol, name, balance, price, change }: any) => (
   <div className="glass p-5 rounded-3xl hover:border-primary/50 transition-colors cursor-pointer group">
@@ -11,31 +12,51 @@ const TokenCard = ({ symbol, name, balance, price, change }: any) => (
         <span className="font-bold text-primary">{symbol[0]}</span>
       </div>
       <div className={cn(
-        "px-2 py-1 rounded-lg text-xs font-medium",
+        "px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1",
         change >= 0 ? "bg-secondary/10 text-secondary" : "bg-red-500/10 text-red-500"
       )}>
-        {change >= 0 ? '+' : ''}{change}%
+        {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+        {change >= 0 ? '+' : ''}{change.toFixed(2)}%
       </div>
     </div>
     <p className="text-gray-400 text-sm mb-1">{name}</p>
     <div className="flex items-baseline gap-2">
-      <h3 className="text-2xl font-bold">{balance} {symbol}</h3>
+      <h3 className="text-2xl font-bold">{balance.toLocaleString()} {symbol}</h3>
     </div>
     <p className="text-gray-500 text-sm mt-1">≈ {formatCurrency(balance * price)}</p>
   </div>
 );
 
-import { cn } from '../lib/utils';
-
 export default function WalletView() {
   const { user } = useAuth();
+  const [prices, setPrices] = useState<TokenPrice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPrices = async () => {
+      const data = await fetchTokenPrices();
+      setPrices(data);
+      setIsLoading(false);
+    };
+    loadPrices();
+    const interval = setInterval(loadPrices, 30000); // Update every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  const getPriceData = (symbol: string) => prices.find(p => p.symbol === symbol) || { price: 0, change24h: 0 };
 
   const tokens = [
-    { symbol: 'SUI', name: 'Sui Network', balance: 1250.45, price: 1.85, change: 5.2 },
-    { symbol: 'cNGN', name: 'Naira Stablecoin', balance: 500000, price: 0.00065, change: -0.1 },
-    { symbol: 'USDC', name: 'USD Coin', balance: 2500, price: 1.00, change: 0.01 },
-    { symbol: 'SOL', name: 'Solana', balance: 12.5, price: 145.20, change: 8.4 },
-  ];
+    { symbol: 'SUI', name: 'Sui Network', balance: 1250.45 },
+    { symbol: 'cNGN', name: 'Naira Stablecoin', balance: 500000 },
+    { symbol: 'ETH', name: 'Ethereum', balance: 0.45 },
+    { symbol: 'BTC', name: 'Bitcoin', balance: 0.012 },
+  ].map(t => ({
+    ...t,
+    price: getPriceData(t.symbol).price,
+    change: getPriceData(t.symbol).change24h
+  }));
+
+  const totalBalance = tokens.reduce((acc, t) => acc + (t.balance * t.price), 0);
 
   return (
     <div className="space-y-8">
@@ -47,7 +68,7 @@ export default function WalletView() {
             <span className="text-sm font-medium uppercase tracking-wider">Total Balance</span>
           </div>
           <h2 className="text-5xl md:text-6xl font-display font-bold mb-6 tracking-tight">
-            {formatCurrency(8450.25)}
+            {isLoading ? '...' : formatCurrency(totalBalance)}
           </h2>
           
           <div className="flex flex-wrap gap-4">
@@ -92,7 +113,10 @@ export default function WalletView() {
       <div>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-display font-bold">Your Assets</h3>
-          <button className="text-sm text-gray-400 hover:text-white">View All</button>
+          <button className="text-sm text-gray-400 hover:text-white flex items-center gap-2">
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            Live Prices
+          </button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {tokens.map((token) => (

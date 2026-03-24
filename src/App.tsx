@@ -6,7 +6,9 @@ import VerificationView from './components/VerificationView';
 import EscrowView from './components/EscrowView';
 import AdminView from './components/AdminView';
 import SubscriptionView from './components/SubscriptionView';
-import { Shield, Wallet, Lock, LayoutDashboard, ArrowRight } from 'lucide-react';
+import SettingsView from './components/SettingsView';
+import { Shield, Wallet, Lock, LayoutDashboard, ArrowRight, Settings } from 'lucide-react';
+import { Toaster } from 'sonner';
 
 import { Logo } from './components/Logo';
 
@@ -43,6 +45,8 @@ function AppContent() {
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
+  username TEXT UNIQUE,
+  username_changes INTEGER DEFAULT 0,
   wallet_address TEXT,
   role TEXT DEFAULT 'user',
   subscription_tier TEXT DEFAULT 'starter',
@@ -130,11 +134,22 @@ CREATE POLICY "Users can update own profile." ON profiles
             </button>
           </div>
           
-          <div className="mt-8 p-4 glass rounded-2xl border-primary/20">
-            <p className="text-[10px] text-primary uppercase font-bold tracking-widest mb-2">Setup Required</p>
-            <p className="text-[11px] text-gray-400 leading-relaxed">
-              If you see "provider not enabled", go to your <span className="text-white font-bold">Supabase Dashboard &gt; Auth &gt; Providers</span> and toggle Google/Facebook to <span className="text-white font-bold">ON</span>.
-            </p>
+          <div className="mt-8 p-4 glass rounded-2xl border-primary/20 text-left">
+            <p className="text-[10px] text-primary uppercase font-bold tracking-widest mb-2">Critical: Fix Redirect Errors</p>
+            <div className="space-y-3 text-[11px] text-gray-400 leading-relaxed">
+              <p>
+                1. <span className="text-white font-bold">Supabase:</span> Set Site URL to <code className="text-primary">https://thalexa-sui.vercel.app/</code> in Auth &gt; URL Configuration.
+              </p>
+              <p>
+                2. <span className="text-white font-bold">Google/Facebook:</span> Add the Callback URL below to your "Authorized Redirect URIs":
+              </p>
+              <div className="bg-black/50 p-2 rounded border border-border font-mono text-[9px] break-all text-white">
+                https://[YOUR-PROJECT-REF].supabase.co/auth/v1/callback
+              </div>
+              <p className="italic text-[9px]">
+                * Replace [YOUR-PROJECT-REF] with your actual Supabase project ID.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -147,15 +162,35 @@ CREATE POLICY "Users can update own profile." ON profiles
       case 'verify': return <VerificationView />;
       case 'escrow': return <EscrowView />;
       case 'admin': return <AdminView />;
-      case 'subscriptions': return <SubscriptionView />;
+      case 'subscription': return <SubscriptionView />;
+      case 'settings': return <SettingsView />;
       default: return <WalletView />;
     }
   };
 
+  const navItems = [
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+    { id: 'verify', label: 'Verify', icon: Shield },
+    { id: 'escrow', label: 'Escrow', icon: Lock },
+    { id: 'subscription', label: 'Plans', icon: ArrowRight },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  if (user.role === 'admin') {
+    navItems.splice(3, 0, { id: 'admin', label: 'Admin', icon: LayoutDashboard });
+  }
+
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      {renderContent()}
-    </Layout>
+    <>
+      <Layout 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        navItems={navItems}
+      >
+        {renderContent()}
+      </Layout>
+      <Toaster position="top-right" theme="dark" richColors />
+    </>
   );
 }
 

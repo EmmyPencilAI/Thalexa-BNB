@@ -4,6 +4,7 @@ import { UserProfile } from '../types';
 
 interface AuthContextType {
   user: UserProfile | null;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   loading: boolean;
   dbReady: boolean;
   signIn: (provider?: 'google' | 'facebook') => Promise<void>;
@@ -58,6 +59,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newProfile: UserProfile = {
           id: userId,
           email: sessionUser.email || '',
+          username: sessionUser.email?.split('@')[0] || `user_${Math.random().toString(36).slice(2, 7)}`,
+          username_changes: 0,
           wallet_address: `0x${Math.random().toString(16).slice(2, 42)}`, // Generate a mock wallet for now
           role: 'user',
           subscription_tier: 'starter',
@@ -107,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, dbReady, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, setUser, loading, dbReady, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

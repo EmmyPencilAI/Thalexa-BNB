@@ -11,6 +11,7 @@ interface SidebarItemProps {
   label: string;
   active?: boolean;
   onClick: () => void;
+  key?: string | number;
 }
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) => (
@@ -28,20 +29,14 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) =
   </button>
 );
 
-export default function Layout({ children, activeTab, setActiveTab }: { 
+export default function Layout({ children, activeTab, setActiveTab, navItems }: { 
   children: React.ReactNode, 
   activeTab: string, 
-  setActiveTab: (tab: string) => void 
+  setActiveTab: (tab: string) => void,
+  navItems: { id: string, label: string, icon: any }[]
 }) {
   const { user, signOut } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-
-  const menuItems = [
-    { id: 'wallet', label: 'Wallet', icon: Wallet },
-    { id: 'verify', label: 'Verification', icon: ShieldCheck },
-    { id: 'escrow', label: 'Escrow', icon: ArrowRightLeft },
-    { id: 'admin', label: 'Admin', icon: LayoutDashboard },
-  ];
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -67,7 +62,7 @@ export default function Layout({ children, activeTab, setActiveTab }: {
         </div>
 
         <nav className="space-y-2">
-          {menuItems.map((item) => (
+          {navItems.map((item) => (
             <SidebarItem
               key={item.id}
               icon={item.icon}
@@ -112,12 +107,14 @@ export default function Layout({ children, activeTab, setActiveTab }: {
             </button>
             <div className="flex items-center gap-3 pl-4 border-l border-border">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold">{user?.email?.split('@')[0] || 'User'}</p>
+                <p className="text-sm font-semibold">{user?.username || user?.email?.split('@')[0] || 'User'}</p>
                 <p className="text-xs text-gray-400">Verified Account</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary p-0.5">
                 <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
-                  <span className="font-bold text-xs">TH</span>
+                  <span className="font-bold text-xs uppercase">
+                    {(user?.username || user?.email || 'TH').substring(0, 2)}
+                  </span>
                 </div>
               </div>
             </div>

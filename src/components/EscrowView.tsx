@@ -2,10 +2,28 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRightLeft, Lock, Unlock, ShieldAlert, Info, ChevronRight, History } from 'lucide-react';
 import { cn, formatCurrency } from '../lib/utils';
+import { toast } from 'sonner';
 
 export default function EscrowView() {
   const [amount, setAmount] = useState('');
   const [receiver, setReceiver] = useState('');
+
+  const handleCreateEscrow = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amount || !receiver) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    toast.promise(
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+      {
+        loading: 'Locking funds in Sui Smart Contract...',
+        success: 'Escrow created successfully! Funds are now locked.',
+        error: 'Escrow creation failed',
+      }
+    );
+  };
 
   const activeEscrows = [
     { id: 'ESC_001', receiver: '0x892...a12', amount: 500, status: 'locked', date: '2026-03-22' },
@@ -27,7 +45,7 @@ export default function EscrowView() {
             </div>
           </div>
 
-          <form className="space-y-6">
+          <form onSubmit={handleCreateEscrow} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-400">Receiver Wallet Address</label>
               <input 

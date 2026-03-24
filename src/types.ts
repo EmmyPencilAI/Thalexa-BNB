@@ -1,6 +1,8 @@
 export interface UserProfile {
   id: string;
   email: string;
+  username?: string;
+  username_changes: number;
   wallet_address: string;
   role: 'user' | 'admin' | 'support';
   subscription_tier: 'starter' | 'professional' | 'enterprise';

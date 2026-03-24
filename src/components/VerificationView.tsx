@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ShieldCheck, QrCode, Upload, Search, CheckCircle2, AlertCircle, FileText, Camera } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../lib/utils';
+import { toast } from 'sonner';
 
 export default function VerificationView() {
   const [mode, setMode] = useState<'verify' | 'register'>('verify');
@@ -11,15 +12,41 @@ export default function VerificationView() {
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
   const handleVerify = () => {
-    // Simulate verification
-    setVerificationResult({
-      status: 'success',
-      id: 'GG_THLX_00001',
-      name: 'Luxury Watch - Thalexa Edition',
-      owner: '0x742d...f44e',
-      registeredAt: '2026-01-15',
-      ipfsHash: 'QmXoyp...789',
-    });
+    if (!searchId.trim()) {
+      toast.error('Please enter a Product ID');
+      return;
+    }
+
+    toast.promise(
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+      {
+        loading: 'Verifying on-chain...',
+        success: () => {
+          setVerificationResult({
+            status: 'success',
+            id: searchId || 'GG_THLX_00001',
+            name: 'Luxury Watch - Thalexa Edition',
+            owner: '0x742d...f44e',
+            registeredAt: '2026-01-15',
+            ipfsHash: 'QmXoyp...789',
+          });
+          return 'Product authenticity verified!';
+        },
+        error: 'Verification failed',
+      }
+    );
+  };
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.promise(
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+      {
+        loading: 'Uploading to IPFS & Minting on Sui...',
+        success: 'Product registered successfully!',
+        error: 'Registration failed',
+      }
+    );
   };
 
   return (
@@ -138,7 +165,7 @@ export default function VerificationView() {
       ) : (
         <div className="glass p-8 rounded-[2.5rem]">
           <h2 className="text-2xl font-display font-bold mb-6">Register New Product</h2>
-          <form className="space-y-6">
+          <form onSubmit={handleRegister} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Product Name</label>
