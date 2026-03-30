@@ -1,4 +1,4 @@
-import { supabase } from './js/supabase.js';
+import { auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, doc, getDoc, setDoc, handleFirestoreError, OperationType } from './js/firebase.js';
 import { state } from './js/state.js';
 import { router } from './js/router.js';
 import { ui } from './js/ui.js';
@@ -10,18 +10,60 @@ const app = {
     // Initialize Lucide icons
     lucide.createIcons();
     
-    // Check for existing session
-    const savedUser = localStorage.getItem('thalexa_user');
-    const savedProfile = localStorage.getItem('thalexa_profile');
-    
-    if (savedUser && savedProfile) {
-      state.setUser(JSON.parse(savedUser));
-      state.setProfile(JSON.parse(savedProfile));
-      router.navigate('wallet');
-      this.updateAllUI();
-    }
+    // Check for existing session via Firebase Auth
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log('User authenticated:', user.uid);
+        state.setUser({
+          id: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL
+        });
+        
+        // Fetch profile from Firestore
+        await this.fetchProfile(user.uid, user.email);
+        
+        if (router.currentScreen === 'onboarding') {
+          router.navigate('wallet');
+        }
+        this.updateAllUI();
+      } else {
+        console.log('No user authenticated');
+        state.clear();
+        router.navigate('onboarding');
+      }
+    });
     
     this.bindEvents();
+  },
+  
+  async fetchProfile(uid, email) {
+    const path = `profiles/${uid}`;
+    try {
+      const docRef = doc(db, 'profiles', uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        state.setProfile(docSnap.data());
+      } else {
+        // Create new profile
+        const newProfile = {
+          id: uid,
+          email: email,
+          subscription_tier: 'starter',
+          monthly_volume: 0,
+          product_count: 0,
+          role: 'user',
+          created_at: new Date().toISOString(),
+        };
+        
+        await setDoc(docRef, newProfile);
+        state.setProfile(newProfile);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
   },
   
   async login() {
@@ -32,78 +74,28 @@ const app = {
       lucide.createIcons();
     }
     
-    // Mock zkLogin flow with Supabase
-    // In a real app, this would use Sui zkLogin SDK
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      }
-    });
-    
-    if (error) {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will handle the rest
+    } catch (error) {
       console.error('Login error:', error);
       alert('Login failed: ' + error.message);
       if (loginBtn) {
         loginBtn.disabled = false;
-        loginBtn.innerHTML = '<i data-lucide="log-in" class="w-5 h-5"></i> Sign in with zkLogin';
+        loginBtn.innerHTML = '<i data-lucide="log-in" class="w-5 h-5"></i> Sign in with Google';
         lucide.createIcons();
       }
-      return;
     }
-    
-    // For demo purposes, we'll simulate a successful login if it's a local dev environment
-    // or if the OAuth flow is just starting.
-    // In the AI Studio preview, we'll mock the profile creation.
-    const mockUser = {
-      id: '0x' + Math.random().toString(16).slice(2, 10) + '...7a8c',
-      email: 'user@thalexa.io',
-    };
-    
-    let { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', mockUser.id)
-      .single();
-      
-    if (profileError && profileError.code === 'PGRST116') {
-      // Create new profile
-      const newProfile = {
-        id: mockUser.id,
-        email: mockUser.email,
-        subscription_tier: 'starter',
-        monthly_volume: 0,
-        product_count: 0,
-        role: 'user',
-        created_at: new Date().toISOString(),
-      };
-      
-      const { data: createdProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert([newProfile])
-        .select()
-        .single();
-        
-      if (createError) {
-        console.error('Profile creation error:', createError);
-        // Fallback to local state for demo
-        profile = newProfile;
-      } else {
-        profile = createdProfile;
-      }
-    }
-    
-    state.setUser(mockUser);
-    state.setProfile(profile);
-    
-    router.navigate('wallet');
-    this.updateAllUI();
   },
   
   async logout() {
-    await supabase.auth.signOut();
-    state.clear();
-    router.navigate('onboarding');
+    try {
+      await signOut(auth);
+      state.clear();
+      router.navigate('onboarding');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   },
   
   updateAllUI() {

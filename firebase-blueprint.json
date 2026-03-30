@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "profiles": {
+      "title": "User Profile",
+      "description": "User profile information including subscription and usage stats",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the user (UID from Firebase Auth)"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address"
+        },
+        "subscription_tier": {
+          "type": "string",
+          "enum": ["starter", "pro", "enterprise"],
+          "description": "The user's subscription tier"
+        },
+        "monthly_volume": {
+          "type": "number",
+          "description": "The user's monthly transaction volume"
+        },
+        "product_count": {
+          "type": "number",
+          "description": "The number of products registered by the user"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "The user's role in the application"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the profile was created"
+        }
+      },
+      "required": ["id", "email", "subscription_tier", "role"]
+    }
+  },
+  "firestore": {
+    "/profiles/{userId}": {
+      "schema": "profiles",
+      "description": "User profile documents stored by their UID"
+    }
+  }
+}
