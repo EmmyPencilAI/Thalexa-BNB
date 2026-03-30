@@ -3,7 +3,11 @@ export const router = {
   history: [],
   
   navigate(route) {
-    if (this.currentRoute === route) return;
+    console.log(`Navigating to: ${route} (Current: ${this.currentRoute})`);
+    if (this.currentRoute === route) {
+      this.updateUI(); // Ensure UI is in sync even if route is same
+      return;
+    }
     
     this.history.push(this.currentRoute);
     this.currentRoute = route;

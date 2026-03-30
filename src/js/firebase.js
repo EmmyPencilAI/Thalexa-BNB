@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -52,4 +52,11 @@ async function testConnection() {
 }
 testConnection();
 
-export { signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, doc, getDoc, setDoc };
+export function onAuthStateChanged(auth, callback) {
+  return auth.onAuthStateChanged((user) => {
+    console.log('Firebase Auth internal state changed:', user ? user.uid : 'null');
+    callback(user);
+  });
+}
+
+export { signInWithRedirect, getRedirectResult, signOut, doc, getDoc, setDoc };

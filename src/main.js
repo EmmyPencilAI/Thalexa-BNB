@@ -10,6 +10,9 @@ const app = {
     // Initialize Lucide icons
     lucide.createIcons();
     
+    // Initial UI sync
+    router.updateUI();
+    
     // Handle redirect result
     try {
       const result = await getRedirectResult(auth);
@@ -21,9 +24,10 @@ const app = {
     }
     
     // Check for existing session via Firebase Auth
+    console.log('Registering onAuthStateChanged...');
     onAuthStateChanged(auth, async (user) => {
+      console.log('onAuthStateChanged fired. User:', user ? user.uid : 'null');
       if (user) {
-        console.log('User authenticated:', user.uid);
         state.setUser({
           id: user.uid,
           email: user.email,
@@ -32,16 +36,35 @@ const app = {
         });
         
         // Fetch profile from Firestore
-        await this.fetchProfile(user.uid, user.email);
+        try {
+          await this.fetchProfile(user.uid, user.email);
+        } catch (error) {
+          console.error('Profile fetch failed, using default:', error);
+          // Set a minimal default profile if fetch fails
+          state.setProfile({
+            id: user.uid,
+            email: user.email,
+            subscription_tier: 'starter',
+            role: 'user'
+          });
+        }
         
-        if (router.currentScreen === 'onboarding') {
+        console.log('Current route before navigation check:', router.currentRoute);
+        const publicRoutes = ['onboarding'];
+        if (publicRoutes.includes(router.currentRoute)) {
           router.navigate('wallet');
         }
         this.updateAllUI();
       } else {
         console.log('No user authenticated');
         state.clear();
-        router.navigate('onboarding');
+        const privateRoutes = ['wallet', 'send', 'receive', 'escrow', 'verification', 'create-escrow', 'subscription', 'settings'];
+        if (privateRoutes.includes(router.currentRoute)) {
+          router.navigate('onboarding');
+        } else {
+          // Even if on onboarding, ensure UI is sync'd
+          router.updateUI();
+        }
       }
     });
     
