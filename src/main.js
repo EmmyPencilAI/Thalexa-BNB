@@ -1,4 +1,4 @@
-import { auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, doc, getDoc, setDoc, handleFirestoreError, OperationType } from './js/firebase.js';
+import { auth, db, googleProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, doc, getDoc, setDoc, handleFirestoreError, OperationType } from './js/firebase.js';
 import { state } from './js/state.js';
 import { router } from './js/router.js';
 import { ui } from './js/ui.js';
@@ -9,6 +9,16 @@ const app = {
     
     // Initialize Lucide icons
     lucide.createIcons();
+    
+    // Handle redirect result
+    try {
+      const result = await getRedirectResult(auth);
+      if (result) {
+        console.log('Redirect result user:', result.user.uid);
+      }
+    } catch (error) {
+      console.error('Redirect error:', error);
+    }
     
     // Check for existing session via Firebase Auth
     onAuthStateChanged(auth, async (user) => {
@@ -75,8 +85,8 @@ const app = {
     }
     
     try {
-      await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle the rest
+      await signInWithRedirect(auth, googleProvider);
+      // onAuthStateChanged will handle the rest after redirect
     } catch (error) {
       console.error('Login error:', error);
       alert('Login failed: ' + error.message);
