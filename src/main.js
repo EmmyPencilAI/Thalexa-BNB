@@ -10,14 +10,22 @@ const app = {
     // Initialize Lucide icons
     lucide.createIcons();
     
-    // Initial UI sync
+    // Initial UI sync - use state.user to decide starting route
+    if (state.user) {
+      console.log('Initial state has user, navigating to wallet');
+      router.currentRoute = 'wallet';
+    } else {
+      router.currentRoute = 'onboarding';
+    }
     router.updateUI();
     
     // Handle redirect result
+    let redirectUser = null;
     try {
       const result = await getRedirectResult(auth);
       if (result) {
-        console.log('Redirect result user:', result.user.uid);
+        console.log('Redirect result user detected:', result.user.uid);
+        redirectUser = result.user;
       }
     } catch (error) {
       console.error('Redirect error:', error);
@@ -25,25 +33,33 @@ const app = {
     
     // Check for existing session via Firebase Auth
     console.log('Registering onAuthStateChanged...');
+    let isFirstAuthEvent = true;
+    
     onAuthStateChanged(auth, async (user) => {
-      console.log('onAuthStateChanged fired. User:', user ? user.uid : 'null');
-      if (user) {
+      console.log('onAuthStateChanged fired. User:', user ? user.uid : 'null', 'First event:', isFirstAuthEvent);
+      
+      // Use redirectUser if it's the first event and we have one
+      const currentUser = user || (isFirstAuthEvent ? redirectUser : null);
+      isFirstAuthEvent = false;
+
+      if (currentUser) {
+        console.log('User authenticated:', currentUser.uid);
         state.setUser({
-          id: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL
+          id: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          photoURL: currentUser.photoURL,
         });
         
         // Fetch profile from Firestore
         try {
-          await this.fetchProfile(user.uid, user.email);
+          await this.fetchProfile(currentUser.uid, currentUser.email);
         } catch (error) {
           console.error('Profile fetch failed, using default:', error);
           // Set a minimal default profile if fetch fails
           state.setProfile({
-            id: user.uid,
-            email: user.email,
+            id: currentUser.uid,
+            email: currentUser.email,
             subscription_tier: 'starter',
             role: 'user'
           });
@@ -52,17 +68,24 @@ const app = {
         console.log('Current route before navigation check:', router.currentRoute);
         const publicRoutes = ['onboarding'];
         if (publicRoutes.includes(router.currentRoute)) {
+          console.log('On public route, navigating to wallet');
           router.navigate('wallet');
+        } else {
+          console.log('Already on private route, updating UI');
+          router.updateUI();
         }
         this.updateAllUI();
       } else {
-        console.log('No user authenticated');
-        state.clear();
+        console.log('No user authenticated (null event)');
+        // Only clear and navigate if we are NOT on a public route
         const privateRoutes = ['wallet', 'send', 'receive', 'escrow', 'verification', 'create-escrow', 'subscription', 'settings'];
         if (privateRoutes.includes(router.currentRoute)) {
+          console.log('On private route without auth, clearing and navigating to onboarding');
+          state.clear();
           router.navigate('onboarding');
         } else {
-          // Even if on onboarding, ensure UI is sync'd
+          console.log('Already on public route, ensuring state is clear');
+          state.clear();
           router.updateUI();
         }
       }

@@ -1,6 +1,6 @@
 export const state = {
-  user: null,
-  profile: null,
+  user: JSON.parse(localStorage.getItem('thalexa_user')) || null,
+  profile: JSON.parse(localStorage.getItem('thalexa_profile')) || null,
   assets: [
     { id: 'sui', name: 'Sui', symbol: 'SUI', balance: 1250.50, price: 1.85, icon: 'https://cryptologos.cc/logos/sui-sui-logo.png' },
     { id: 'cngn', name: 'Compliant Naira', symbol: 'cNGN', balance: 850000, price: 0.00065, icon: 'https://picsum.photos/seed/cngn/100/100' },
