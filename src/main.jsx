@@ -109,10 +109,16 @@ function App() {
          setScreen('home');
        } else {
           // Auto-create profile if not exists
-          const idResp = await fetch('/api/ids/generate/user');
-          if (!idResp.ok) throw new Error(`Server ID generation failed: ${idResp.status}`);
-          const idData = await idResp.json();
-          const thalexId = idData.id;
+          let thalexId;
+          try {
+            const idResp = await fetch('/api/ids/generate/user');
+            if (!idResp.ok) throw new Error(`HTTP error ${idResp.status}`);
+            const idData = await idResp.json();
+            thalexId = idData.id;
+          } catch (err) {
+            console.warn('Server ID generation failed, using local fallback:', err);
+            thalexId = 'THLX-USER-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+          }
 
           const wallet = '0x' + Math.random().toString(16).slice(2, 42);
           const newUser = {
@@ -1501,8 +1507,16 @@ function CreateEscrowView({ user, setScreen }) {
     setLoading(true);
     try {
        // 1. Generate Thalexa Escrow ID
-       const idResp = await fetch('/api/ids/generate/escrow');
-       const { id: thalexaEscrowId } = await idResp.json();
+       let thalexaEscrowId;
+       try {
+         const idResp = await fetch('/api/ids/generate/escrow');
+         if (!idResp.ok) throw new Error(`HTTP error ${idResp.status}`);
+         const idData = await idResp.json();
+         thalexaEscrowId = idData.id;
+       } catch (err) {
+         console.warn('Escrow ID generation failed, using local fallback:', err);
+         thalexaEscrowId = 'THLX-ESC-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+       }
 
        console.log("Calling Contract with EscrowID:", thalexaEscrowId);
        // In a real dApp, we'd call the smart contract here:
@@ -1607,8 +1621,16 @@ function ProductsView({ user, setScreen }) {
     setIsRegistering(true);
     try {
       // 1. Get Reserved Thalexa ID from Backend
-      const idResp = await fetch('/api/ids/generate/product');
-      const { id: thalexaId } = await idResp.json();
+      let thalexaId;
+      try {
+        const idResp = await fetch('/api/ids/generate/product');
+        if (!idResp.ok) throw new Error(`HTTP error ${idResp.status}`);
+        const idData = await idResp.json();
+        thalexaId = idData.id;
+      } catch (err) {
+        console.warn('Product ID generation failed, using local fallback:', err);
+        thalexaId = 'THLX-PROD-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      }
 
       // 2. Upload to IPFS with Thalexa ID in metadata
       const meta = {
