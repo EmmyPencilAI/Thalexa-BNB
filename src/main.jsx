@@ -137,11 +137,14 @@ function App() {
       </AnimatePresence>
 
       {user && screen !== 'landing' && (
-        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass border border-white/10 py-4 px-8 flex justify-between items-center z-50 rounded-[2.5rem] shadow-2xl backdrop-blur-2xl md:bottom-auto md:top-6 md:left-[85%] md:flex-col md:gap-8 md:w-20 md:py-8 md:px-0 md:rounded-3xl">
-          <NavItem icon={<Wallet />} active={screen === 'wallet'} onClick={() => setScreen('wallet')} />
-          <NavItem icon={<ShieldCheck />} active={screen === 'escrow'} onClick={() => setScreen('escrow')} />
-          <NavItem icon={<Zap />} active={screen === 'products'} onClick={() => setScreen('products')} />
-          <NavItem icon={<Settings />} active={screen === 'settings'} onClick={() => setScreen('settings')} />
+        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass border border-white/10 py-4 px-8 flex justify-between items-center z-50 rounded-[2.5rem] shadow-2xl backdrop-blur-2xl md:bottom-auto md:top-6 md:left-[85%] md:flex-col md:gap-8 md:w-20 md:py-8 md:px-0 md:rounded-3xl hover:border-primary/30 transition-colors">
+          <NavItem icon={<Wallet />} active={screen === 'wallet'} onClick={() => setScreen('wallet')} label="Wallet" />
+          <NavItem icon={<ShieldCheck />} active={screen === 'escrow'} onClick={() => setScreen('escrow')} label="Escrow" />
+          <NavItem icon={<Zap />} active={screen === 'products'} onClick={() => setScreen('products')} label="Products" />
+          <NavItem icon={<Settings />} active={screen === 'settings'} onClick={() => setScreen('settings')} label="Settings" />
+          {user.role === 'admin' && (
+            <NavItem icon={<Database />} active={screen === 'admin'} onClick={() => setScreen('admin')} label="Admin" />
+          )}
         </nav>
       )}
     </div>
@@ -151,116 +154,471 @@ function App() {
 // ⸻ LANDING PAGE (PRODUCTION ECOSYSTEM) ⸻
 
 function LandingPage({ onStart, stats }) {
+  const [tickerIndex, setTickerIndex] = useState(0);
+  const tickerEvents = [
+    "ASSET_MINT: Luxury Watch X1 (GENEVA_NODE)",
+    "ESCROW_FUNDED: 4.52 BNB (0x7a...2b4e)",
+    "REGISTRY_SYNC: IPFS_PROPAGATION (100.0%)",
+    "VERIFICATION: AUTHENTIC (GG_THLX_000042)",
+    "NETWORK_UPDATE: INFRASTRUCTURE_FLUX (GRADE_AAA)"
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTickerIndex(prev => (prev + 1) % tickerEvents.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="overflow-x-hidden w-full">
+    <div className="overflow-x-hidden w-full bg-[#030303] selection:bg-primary selection:text-black min-h-screen relative">
+      <NetworkBackground />
+      
+      {/* Real-time Ticker */}
+      <div className="fixed bottom-0 left-0 right-0 z-[60] glass border-t border-white/10 p-2 overflow-hidden pointer-events-none">
+         <div className="max-w-7xl mx-auto flex items-center gap-4">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-lg shadow-primary/50"></span>
+            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-primary font-mono-custom whitespace-nowrap">Live Network Pulse:</span>
+            <AnimatePresence mode="wait">
+              <motion.span 
+                key={tickerIndex}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500 font-mono-custom"
+              >
+                {tickerEvents[tickerIndex]}
+              </motion.span>
+            </AnimatePresence>
+         </div>
+      </div>
+      
       {/* Navbar */}
-      <nav className="p-6 flex justify-between items-center max-w-7xl mx-auto border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-black font-black italic underline decoration-secondary">T</div>
-          <span className="text-xl font-black italic tracking-tighter font-heading">THALEXA</span>
+      <nav className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center max-w-7xl mx-auto backdrop-blur-xl border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-black font-black italic shadow-2xl shadow-primary/20 font-heading">T</div>
+          <span className="text-2xl font-black italic tracking-tighter font-heading text-white">THALEXA</span>
         </div>
-        <div className="hidden md:flex gap-8 text-xs font-bold uppercase tracking-widest text-gray-400 font-mono-custom">
-           <a href="#" className="hover:text-primary transition-colors">Ecosystem</a>
-           <a href="#" className="hover:text-primary transition-colors">Developers</a>
-           <a href="#" className="hover:text-primary transition-colors">Protocol</a>
+        <div className="hidden md:flex gap-10 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 font-mono-custom">
+           <a href="#features" className="hover:text-primary transition-all">Protocol</a>
+           <a href="#verify" className="hover:text-primary transition-all">Verification</a>
+           <a href="#how" className="hover:text-primary transition-all">Documentation</a>
         </div>
         <button 
-          onClick={onStart}
-          className="bg-primary text-black px-6 py-2 rounded-full font-bold text-sm hover:scale-105 transition-transform font-heading"
+          onClick={() => { console.log("Launch Terminal Triggered"); onStart(); }}
+          className="bg-white text-black px-8 py-3 rounded-2xl font-black text-xs hover:bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all font-heading uppercase tracking-widest shadow-xl"
         >
           Launch Terminal
         </button>
       </nav>
 
       {/* Hero Section */}
-      <section className="px-6 py-24 max-w-7xl mx-auto text-center relative">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
-        
-        <motion.div 
-          initial={{ y: 20, opacity: 0 }} 
-          animate={{ y: 0, opacity: 1 }}
-          className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full border border-primary/20 text-[10px] font-bold text-primary uppercase tracking-widest mb-8 font-mono-custom"
-        >
-          <Zap size={14} className="fill-current" /> BNB Chain Native Authenticity
-        </motion.div>
+      <section className="relative pt-32 pb-24 px-6 max-w-7xl mx-auto min-h-screen flex flex-col justify-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="lg:col-span-6 z-10 text-left">
+            <motion.div 
+              initial={{ x: -50, opacity: 0 }} 
+              animate={{ x: 0, opacity: 1 }}
+              className="inline-flex items-center gap-3 px-5 py-2 glass rounded-full border border-primary/30 text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-10 font-mono-custom bg-primary/5"
+            >
+              <Zap size={14} className="animate-pulse" /> Verified on BNB Chain
+            </motion.div>
 
-        <h1 className="text-6xl md:text-9xl font-black italic tracking-tighter leading-none mb-8 uppercase font-heading">
-          On-Chain <span className="text-primary">Authenticity</span> <br /> Layer
-        </h1>
-        
-        <p className="text-gray-400 text-lg md:text-2xl max-w-3xl mx-auto mb-12 font-medium">
-          Connecting real-world commerce, luxury goods, and digital economies into one verifiable trust network on BNB Chain.
-        </p>
+            <motion.h1 
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-6xl md:text-8xl font-black italic tracking-tighter leading-[0.9] mb-10 uppercase font-heading text-white"
+            >
+              The On-Chain <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-violet-500 to-primary/50">Authenticity</span> <br /> Layer
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-gray-400 text-xl md:text-2xl max-w-xl mb-12 font-medium leading-tight font-nevera"
+            >
+              Every product becomes a verifiable digital truth. Connecting luxury commerce and global supply chains to the blockchain.
+            </motion.p>
 
-        <div className="flex flex-col md:flex-row justify-center gap-4">
-          <button onClick={onStart} className="px-10 py-5 bg-white text-black rounded-2xl font-black text-lg hover:bg-primary transition-all font-heading">
-            Get Started
-          </button>
-          <button className="px-10 py-5 glass border border-white/10 rounded-2xl font-black text-lg hover:bg-white/5 transition-all font-heading">
-            Build with API
-          </button>
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="flex flex-col sm:flex-row gap-6"
+            >
+              <button onClick={() => { console.log('Hero Verify Triggered'); onStart(); }} className="group relative px-10 py-6 bg-primary text-black rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all font-heading shadow-[0_0_40px_rgba(0,255,133,0.3)]">
+                Verify Product
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform rounded-[2rem]"></div>
+              </button>
+              <button className="px-10 py-6 glass border border-white/10 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-white/5 transition-all font-heading text-white">
+                Explore Network
+              </button>
+            </motion.div>
+          </div>
+
+          <div className="lg:col-span-6 relative mt-12 lg:mt-0">
+             <ProductGrid3D />
+          </div>
         </div>
 
-        {/* System Pulse */}
-        <div className="mt-24 grid grid-cols-2 lg:grid-cols-4 gap-6">
-           <StatCard icon={<Cpu />} label="Blockchain" val={stats?.bnb_rpc || 'fetching...'} color="text-secondary" />
-           <StatCard icon={<Database />} label="Network" val={stats?.total_products?.toLocaleString() || '12,450'} color="text-primary" />
-           <StatCard icon={<TrendingUp />} label="Transactions" val={stats?.active_transactions?.toLocaleString() || '5,280'} color="text-white" />
-           <StatCard icon={<Globe />} label="Nodes" val="99.9% uptime" color="text-gray-500" />
+        {/* Global Pulse Grid */}
+        <div className="mt-32 grid grid-cols-2 md:grid-cols-4 gap-6">
+           <StatCard icon={<Cpu className="text-secondary" />} label="EVM Runtime" val="Operational" color="text-secondary" />
+           <StatCard icon={<Database className="text-primary" />} label="Assets Cached" val="1.4M+" color="text-primary" />
+           <StatCard icon={<TrendingUp className="text-white" />} label="Net Volume" val="$32.5B" color="text-white" />
+           <StatCard icon={<ShieldCheck className="text-gray-500" />} label="Security Tier" val="Grade AAA" color="text-gray-500" />
         </div>
       </section>
 
-      {/* Global Intel Map */}
-      <section className="py-24 bg-[#050505] border-y border-white/5">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-8">
-            <div className="max-w-xl text-left">
-               <h2 className="text-5xl font-black uppercase italic tracking-tighter mb-4 font-heading">Global Onboarding <span className="text-primary">Intelligence</span></h2>
-               <p className="text-gray-500 leading-relaxed font-medium">Monitoring the pulse of commerce. Real-time data points from authenticated transactions and user onboarding per region.</p>
+      {/* Verification Scanner Section */}
+      <section id="verify" className="py-32 px-6 bg-[#050505] relative overflow-hidden">
+         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-secondary/5 rounded-full blur-[150px] -z-10 translate-x-1/2"></div>
+         <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-24">
+               <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-6 font-heading text-white">Verification <span className="text-primary">Registry</span></h2>
+               <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto font-medium font-nevera">Input a Protocol ID to trace a product's journey, ownership history, and current authenticity status.</p>
             </div>
-            <div className="glass px-8 py-6 rounded-3xl border border-primary/20 bg-primary/5">
-               <p className="text-[10px] text-primary uppercase font-black mb-1 font-mono-custom">Live Ping</p>
-               <p className="text-2xl font-mono-custom">0.009 BNB Treasury active</p>
-            </div>
-          </div>
+            
+            <InteractionScanner />
+         </div>
+      </section>
 
-          <div className="relative aspect-video glass rounded-[4rem] border border-white/5 overflow-hidden flex items-center justify-center">
-             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
-             {/* Mock World Map Visualization */}
-             <div className="relative w-full h-full p-12 opacity-40">
-                <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                <div className="absolute top-1/3 left-1/2 w-4 h-4 bg-secondary rounded-full animate-pulse"></div>
-                <div className="absolute bottom-1/3 right-1/4 w-4 h-4 bg-primary rounded-full animate-ping"></div>
-                <svg className="w-full h-full opacity-10" viewBox="0 0 1000 500">
-                   <path d="M100,200 Q300,100 500,250 T900,150" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="10,10" />
-                   <path d="M200,400 Q400,300 600,450 T800,350" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="10,10" />
-                </svg>
-             </div>
-             <div className="absolute z-10 text-center">
-                <Globe size={120} className="text-primary/20 mb-4 mx-auto" strokeWidth={1} />
-                <p className="text-2xl font-black tracking-widest text-white/50 uppercase font-heading">Network Discovery Mode</p>
-             </div>
-          </div>
-        </div>
+      {/* How it Works - Pipeline */}
+      <section id="how" className="py-32 px-6">
+         <div className="max-w-7xl mx-auto">
+            <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-20 font-heading text-left text-white">Protocol <span className="text-violet-500">Flux</span> Pipeline</h2>
+            <PipelineFlow />
+         </div>
+      </section>
+
+      {/* Features Grid */}
+      <section id="features" className="py-32 px-6 bg-black relative">
+         <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+               <FeatureCard 
+                 icon={<ShieldCheck size={40}/>} 
+                 title="On-Chain Identity" 
+                 desc="Every product is minted as a high-fidelity digital twin with unique cryptographic signatures." 
+                 glow="shadow-primary/20"
+               />
+               <FeatureCard 
+                 icon={<MapIcon size={40}/>} 
+                 title="Supply Chain Flux" 
+                 desc="Real-time tracking of movement across global nodes with immutable checkpoint verification." 
+                 glow="shadow-violet-500/20"
+               />
+               <FeatureCard 
+                 icon={<Zap size={40}/>} 
+                 title="Zero-Knowledge Proofs" 
+                 desc="Verify authenticity without revealing sensitive manufacturer data or trade secrets." 
+                 glow="shadow-secondary/20"
+               />
+            </div>
+         </div>
+      </section>
+
+      {/* Industries Orbs */}
+      <section className="py-32 px-6 overflow-hidden">
+         <div className="max-w-7xl mx-auto text-center">
+            <h2 className="text-5xl font-black uppercase italic tracking-tighter mb-24 font-heading text-white">Global <span className="text-gray-500">Integration</span></h2>
+            <IndustryOrbs />
+         </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-48 px-6 relative overflow-hidden bg-gradient-to-b from-black to-primary/10">
+         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent"></div>
+         <div className="max-w-4xl mx-auto text-center relative z-10">
+            <motion.h2 
+              whileInView={{ scale: [0.95, 1], opacity: [0, 1] }}
+              className="text-6xl md:text-9xl font-black italic uppercase tracking-tighter font-heading mb-12 text-white"
+            >
+              Every Product <br /> Should <span className="text-primary italic">Prove</span> Itself.
+            </motion.h2>
+            <div className="flex flex-col md:flex-row justify-center gap-6">
+              <button onClick={() => { console.log('CTA Hub Triggered'); onStart(); }} className="px-12 py-8 bg-white text-black rounded-[3rem] font-black text-xl uppercase tracking-widest hover:bg-primary transition-all font-heading shadow-2xl">
+                Get Verification Hub
+              </button>
+              <button className="px-12 py-8 glass border border-white/10 rounded-[3rem] font-black text-xl uppercase tracking-widest hover:bg-white/5 transition-all font-heading text-white">
+                View Protocol Docs
+              </button>
+            </div>
+         </div>
       </section>
 
       {/* Footer */}
-      <footer className="p-12 text-center border-t border-white/5 text-gray-500 text-xs font-bold uppercase tracking-widest bg-black font-mono-custom">
-        Thalexa Protocol © 2026 • Real Infrastructure Only • Built for BNB Chain
+      <footer className="p-16 text-center border-t border-white/5 text-gray-600 text-[10px] font-black uppercase tracking-[0.5em] bg-black font-mono-custom">
+        Thalexa Protocol © 2026 • Intelligent Web3 Infrastructure • Powered by BNB Chain
       </footer>
+    </div>
+  );
+}
+
+// ⸻ NEW LANDING COMPONENTS ⸻
+
+function NetworkBackground() {
+  return (
+    <div className="fixed inset-0 -z-50 pointer-events-none opacity-20">
+      <div className="absolute inset-0 bg-[#030303]"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_800px_at_50%_-200px,rgba(0,255,133,0.1),transparent)]"></div>
+    </div>
+  );
+}
+
+function ProductGrid3D() {
+  const products = [
+    { id: 1, name: 'Chrono Lux X', type: 'Luxury Watch', p: '2.4 BNB', img: '⌚' },
+    { id: 2, name: 'Velocity One', type: 'Tech Sneaker', p: '0.8 BNB', img: '👟' },
+    { id: 3, name: 'Cyber Bag V4', type: 'Futuristic Bag', p: '1.2 BNB', img: '💼' },
+    { id: 4, name: 'Neural Link 01', type: 'Robotic Artifact', p: '5.6 BNB', img: '🤖' },
+  ];
+
+  return (
+    <div className="relative h-[600px] w-full flex items-center justify-center perspective-1000">
+      <div className="grid grid-cols-2 gap-4 translate-z-10 rotate-x-12 rotate-y--12">
+        {products.map((item, i) => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, scale: 0.5, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ y: -20, scale: 1.05 }}
+            className="group glass p-8 rounded-[3rem] border border-white/10 w-[240px] h-[300px] flex flex-col justify-between relative overflow-hidden hover:border-primary/50 transition-all cursor-pointer shadow-2xl text-left"
+          >
+            <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity text-left"></div>
+            <div className="flex justify-between items-start text-left">
+               <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xs font-black uppercase text-primary border border-white/5">0{i+1}</div>
+               <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 font-mono-custom text-left">Protocol Valid</span>
+            </div>
+            
+            <div className="text-6xl text-center py-4 transform group-hover:scale-125 transition-transform duration-500">{item.img}</div>
+            
+            <div className="text-left">
+              <h4 className="text-lg font-black italic uppercase tracking-tighter font-heading text-white">{item.name}</h4>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4 font-mono-custom">{item.type}</p>
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-2xl border border-white/5">
+                 <span className="text-xs font-black italic text-primary font-heading">{item.p}</span>
+                 <ArrowUpRight size={14} className="text-gray-500 group-hover:text-primary transition-colors" />
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+      
+      {/* Decorative Network Lines */}
+      <div className="absolute inset-0 pointer-events-none p-12 overflow-hidden">
+         <svg className="w-full h-full opacity-10" viewBox="0 0 1000 600">
+            <path d="M200,100 L400,200 M600,100 L800,250 M300,400 L500,500" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" />
+         </svg>
+      </div>
+    </div>
+  );
+}
+
+function InteractionScanner() {
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState(null); // 'authentic', 'invalid', 'scanning'
+  const [history, setHistory] = useState([]);
+
+  const handleScan = () => {
+    if (!input) return;
+    setStatus('scanning');
+    setTimeout(() => {
+      if (input === 'GG_THLX_000042') {
+        setStatus('authentic');
+        setHistory([
+          { event: 'Minted in Geneva', op: 'Node_Auth_01', t: '2026-01-12' },
+          { event: 'Global Hub Sync', op: 'Bridge_EVM', t: '2026-02-05' },
+          { event: 'Owned by Protocol', op: 'User_72', t: '2026-03-24' },
+        ]);
+      } else {
+        setStatus('invalid');
+      }
+    }, 2000);
+  };
+
+  return (
+    <div className="glass p-12 rounded-[5rem] border border-white/10 relative overflow-hidden bg-black/40">
+       <div className="max-w-4xl mx-auto">
+          <div className="relative mb-12">
+             <input 
+               type="text" 
+               placeholder="Protocol ID (e.g. GG_THLX_000042)"
+               className="w-full glass bg-white/5 p-12 rounded-[4rem] border-2 border-white/10 focus:border-primary transition-all text-4xl font-black italic uppercase tracking-tighter font-heading text-white outline-none pr-48 text-left"
+               value={input}
+               onChange={(e) => setInput(e.target.value)}
+             />
+             <button 
+               onClick={handleScan}
+               className="absolute right-6 top-6 bg-primary text-black p-8 rounded-[2.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all"
+             >
+               <Zap size={40} className={status === 'scanning' ? 'animate-spin' : ''} />
+             </button>
+          </div>
+
+          <AnimatePresence mode="wait">
+             {status === 'scanning' && (
+               <motion.div 
+                 key="scanning"
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 className="text-center py-24"
+               >
+                  <div className="w-32 h-32 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-8 shadow-[0_0_50px_rgba(0,255,133,0.3)]"></div>
+                  <h3 className="text-3xl font-black italic uppercase tracking-tighter text-white font-heading">Handshaking Protocol...</h3>
+               </motion.div>
+             )}
+
+             {status === 'authentic' && (
+               <motion.div 
+                 key="authentic"
+                 initial={{ y: 50, opacity: 0 }}
+                 animate={{ y: 0, opacity: 1 }}
+                 className="grid grid-cols-1 md:grid-cols-2 gap-12"
+               >
+                  <div className="glass p-12 rounded-[4rem] border border-secondary/50 bg-secondary/10 flex flex-col items-center justify-center text-center relative">
+                     <div className="absolute top-0 right-0 p-8">
+                        <CheckCircle2 size={40} className="text-secondary animate-pulse" />
+                     </div>
+                     <div className="w-48 h-48 bg-white p-6 rounded-[3rem] mb-10 shadow-2xl relative flex items-center justify-center text-center">
+                        <QRCodeSVG value="THALEXA_VERIFIED" size={144} />
+                        <div className="absolute inset-0 border-4 border-secondary/50 rounded-[3rem] animate-pulse"></div>
+                     </div>
+                     <h3 className="text-5xl font-black italic uppercase text-secondary font-heading mb-2">Authentic</h3>
+                     <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.4em] font-mono-custom">Registry Confirmed</p>
+                  </div>
+
+                  <div className="space-y-4 text-left">
+                     <h4 className="text-xl font-black italic uppercase tracking-tighter text-white font-heading mb-6">Traceability Flux</h4>
+                     {history.map((h, i) => (
+                       <div key={i} className="glass p-6 rounded-3xl border border-white/5 flex justify-between items-center group hover:border-primary/30 transition-all">
+                          <div className="text-left">
+                             <p className="text-lg font-black italic text-white uppercase font-heading">{h.event}</p>
+                             <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest font-mono-custom">{h.op}</p>
+                          </div>
+                          <div className="text-xs font-bold text-gray-400 font-mono-custom text-left">{h.t}</div>
+                       </div>
+                     ))}
+                     <button className="w-full p-6 glass border border-white/10 rounded-3xl text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all text-white">Download Full Audit Log (PDF)</button>
+                  </div>
+               </motion.div>
+             )}
+
+             {status === 'invalid' && (
+               <motion.div 
+                 key="invalid"
+                 initial={{ scale: 0.9, opacity: 0 }}
+                 animate={{ scale: 1, opacity: 1 }}
+                 className="p-24 glass border border-red-500/50 bg-red-500/10 rounded-[5rem] text-center"
+               >
+                  <div className="w-24 h-24 bg-red-500/50 rounded-full flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-red-500/50">
+                     <AlertCircle size={56} className="text-white" />
+                  </div>
+                  <h3 className="text-6xl font-black italic uppercase text-red-500 font-heading mb-4">Integrity Breach</h3>
+                  <p className="text-gray-400 text-xl font-nevera max-w-xl mx-auto leading-relaxed">This identity hash does not exist in the Thalexa protocol. Possible forgery or unverified node origin detected.</p>
+               </motion.div>
+             )}
+          </AnimatePresence>
+       </div>
+    </div>
+  );
+}
+
+function PipelineFlow() {
+  const steps = [
+    { id: '01', title: 'Product Registry', text: 'Creation of the digital twin with on-chain metadata hashes.', color: 'text-primary' },
+    { id: '02', title: 'ID Binding', text: 'Physical binding using NFC, QR, or Biometric markers.', color: 'text-violet-500' },
+    { id: '03', title: 'Chain Sync', text: 'Broadcasting the state across 10,000+ infrastructure nodes.', color: 'text-secondary' },
+    { id: '04', title: 'Truth Verification', text: 'Instant worldwide verification for consumers and nodes.', color: 'text-white' },
+  ];
+
+  return (
+    <div className="relative flex flex-col md:flex-row gap-6 md:gap-4 overflow-x-auto pb-12 no-scrollbar">
+       {steps.map((s, i) => (
+         <div key={s.id} className="flex-1 min-w-[280px] group relative text-left">
+            <div className="glass p-10 rounded-[3.5rem] border border-white/10 group-hover:border-white/30 transition-all min-h-[350px] flex flex-col justify-between">
+               <span className={`text-6xl font-black italic opacity-20 group-hover:opacity-100 transition-opacity font-heading ${s.color}`}>{s.id}</span>
+               <div className="text-left">
+                  <h4 className="text-2xl font-black italic uppercase tracking-tighter text-white font-heading mb-4 leading-tight">{s.title}</h4>
+                  <p className="text-gray-500 text-sm font-medium leading-relaxed font-nevera">{s.text}</p>
+               </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div className="hidden md:block absolute top-1/2 -right-4 translate-y--1/2 z-10 p-2 glass rounded-full border border-white/10">
+                 <ChevronRight size={20} className="text-primary" />
+              </div>
+            )}
+         </div>
+       ))}
+    </div>
+  );
+}
+
+function FeatureCard({ icon, title, desc, glow }) {
+  return (
+    <motion.div 
+      whileHover={{ y: -10 }}
+      className={`glass p-12 rounded-[4rem] border border-white/5 hover:border-white/20 transition-all flex flex-col justify-between min-h-[400px] shadow-2xl text-left ${glow}`}
+    >
+       <div className="w-20 h-20 bg-white/5 rounded-[2rem] border border-white/10 flex items-center justify-center text-primary mb-12 shadow-inner text-left">
+          {icon}
+       </div>
+       <div className="text-left">
+         <h4 className="text-3xl font-black italic uppercase tracking-tighter font-heading text-white mb-6 leading-tight">{title}</h4>
+         <p className="text-gray-500 text-lg leading-relaxed font-medium font-nevera opacity-80">{desc}</p>
+       </div>
+    </motion.div>
+  );
+}
+
+function IndustryOrbs() {
+  const industries = [
+    { name: 'Luxury Goods', size: 'w-48 h-48', pos: 'translate-x--24', color: 'bg-primary/20' },
+    { name: 'Supply Chain', size: 'w-64 h-64', pos: 'translate-y--12', color: 'bg-violet-500/20' },
+    { name: 'Gaming Assets', size: 'w-40 h-40', pos: 'translate-x-12 translate-y-12', color: 'bg-secondary/20' },
+    { name: 'Pharma Registry', size: 'w-56 h-56', pos: 'translate-x-32 translate-y--24', color: 'bg-blue-500/20' },
+  ];
+
+  return (
+    <div className="flex flex-wrap justify-center items-center gap-12 py-24 relative">
+       {industries.map((ind, i) => (
+         <motion.div
+           key={ind.name}
+           animate={{ 
+             y: [0, -20, 0],
+             rotate: [0, 5, 0]
+           }}
+           transition={{ 
+             duration: 5 + i, 
+             repeat: Infinity,
+             ease: "easeInOut"
+           }}
+           className={`group relative ${ind.size} rounded-full glass border border-white/10 flex items-center justify-center text-center p-6 cursor-pointer hover:border-primary/50 transition-all ${ind.pos}`}
+         >
+            <div className={`absolute inset-0 ${ind.color} blur-[40px] rounded-full opacity-30 group-hover:opacity-100 transition-opacity`}></div>
+            <span className="relative z-10 text-xl font-black italic uppercase tracking-tighter font-heading text-white leading-none">{ind.name}</span>
+         </motion.div>
+       ))}
     </div>
   );
 }
 
 function StatCard({ icon, label, val, color }) {
   return (
-    <div className="glass p-8 rounded-[3rem] border border-white/5 text-left hover:scale-105 transition-all cursor-default">
-      <div className={`mb-4 ${color}`}>{React.cloneElement(icon, { size: 32 })}</div>
-      <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1 font-mono-custom">{label}</p>
-      <p className="text-3xl font-black italic font-heading">{val}</p>
+    <div className="glass p-10 rounded-[3.5rem] border border-white/5 text-left hover:border-white/20 transition-all cursor-default relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-100 transition-opacity">
+         {icon}
+      </div>
+      <p className="text-[10px] text-gray-500 uppercase font-black tracking-[0.4em] mb-4 font-mono-custom text-left">{label}</p>
+      <p className={`text-3xl font-black italic font-heading ${color} text-left`}>{val}</p>
     </div>
   );
 }
+
 
 // ⸻ WALLET SYSTEM (REAL MONEY) ⸻
 
@@ -283,6 +641,32 @@ function WalletView({ user, setScreen, stats }) {
              <span className="text-xs font-black uppercase tracking-tighter font-mono-custom">BNB Mainnet</span>
           </div>
         </header>
+
+        <section className="mb-12 relative overflow-hidden">
+           <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading text-primary">Live Transaction Pulse</h3>
+              <div className="flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-secondary animate-ping"></div>
+                 <span className="text-[9px] font-black uppercase tracking-widest text-secondary font-mono-custom">Network Relay Active</span>
+              </div>
+           </div>
+           <div className="glass p-6 rounded-3xl border border-white/5 overflow-hidden h-16 flex items-center relative">
+              <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-l from-black/50 to-transparent z-10 pointer-events-none"></div>
+              <motion.div 
+                animate={{ x: [-1000, 0] }}
+                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                className="flex gap-12 whitespace-nowrap"
+              >
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500 font-mono-custom">
+                    <span className="text-white">TX_{Math.random().toString(16).slice(2,8)}:</span> MINT_SUCCESS (0x...{Math.random().toString(16).slice(2,4)})
+                    <span className="w-1 h-1 bg-white/20 rounded-full"></span>
+                    <span className="text-white">NODE_{i+1}:</span> {Math.floor(Math.random() * 50) + 10}ms LATENCY
+                  </div>
+                ))}
+              </motion.div>
+           </div>
+        </section>
 
         <div className="bg-gradient-to-br from-[#111] to-black p-12 rounded-[4rem] border border-white/10 shadow-2xl mb-12 relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
           <div className="absolute top-0 right-0 w-80 h-80 bg-primary/10 rounded-full blur-[120px]"></div>
