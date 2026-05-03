@@ -110,7 +110,10 @@ function App() {
        } else {
           // Auto-create profile if not exists
           const idResp = await fetch('/api/ids/generate/user');
-          const { id: thalexId } = await idResp.json();
+          if (!idResp.ok) throw new Error(`Server ID generation failed: ${idResp.status}`);
+          const idData = await idResp.json();
+          const thalexId = idData.id;
+
           const wallet = '0x' + Math.random().toString(16).slice(2, 42);
           const newUser = {
             id: thalexId,
@@ -136,8 +139,14 @@ function App() {
           }
        }
     } catch (e) {
-       console.error(e);
+       console.error('Login Error:', e);
        alert('Protocol Error: ' + (e.message || 'Identity synchronization failed.'));
+       // Fallback for demo: if API fails, at least let them in if they have an email
+       if (loginData.email) {
+          const fallbackId = 'THLX-USER-FALLBACK';
+          setUser({ email: loginData.email, thalexa_id: fallbackId, username: 'guest', wallet_address: '0x000...000' });
+          setScreen('home');
+       }
     } finally {
        setLoading(false);
     }
@@ -171,6 +180,16 @@ function App() {
   }, [user]);
 
   const renderScreen = () => {
+    if (loading && !user) {
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white text-primary">
+           <Zap className="animate-bounce" size={64} />
+           <p className="mt-4 font-black italic uppercase tracking-tighter font-heading text-2xl">Synchronizing Protocol Node...</p>
+           <p className="text-gray-400 font-mono-custom text-[10px] uppercase tracking-[0.5em] mt-2 animate-pulse">Awaiting handshake response</p>
+        </div>
+      );
+    }
+
     if (!user) {
       if (screen === 'onboarding') return <Onboarding onLogin={handleLogin} loading={loading} />;
       return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
@@ -345,7 +364,7 @@ function LandingPage({ onStart, stats, products }) {
            <a href="#how" className="hover:text-primary transition-all">Documentation</a>
         </div>
         <button 
-          onClick={() => { console.log("Launch Terminal Triggered"); onStart(); }}
+          onClick={onStart}
           className="bg-white text-black px-8 py-3 rounded-2xl font-black text-xs hover:bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all font-heading uppercase tracking-widest shadow-xl"
         >
           Launch Terminal
@@ -388,7 +407,7 @@ function LandingPage({ onStart, stats, products }) {
               transition={{ delay: 0.6 }}
               className="flex flex-col sm:flex-row gap-6"
             >
-              <button onClick={() => { console.log('Hero Verify Triggered'); onStart(); }} className="group relative px-10 py-6 bg-primary text-black rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all font-heading shadow-[0_0_40px_rgba(0,255,133,0.3)]">
+              <button onClick={onStart} className="group relative px-10 py-6 bg-primary text-black rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all font-heading shadow-[0_0_40px_rgba(0,255,133,0.3)]">
                 Verify Product
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform rounded-[2rem]"></div>
               </button>
@@ -400,18 +419,33 @@ function LandingPage({ onStart, stats, products }) {
 
           <div className="lg:col-span-6 relative mt-12 lg:mt-0">
              {stats?.landing_asset ? (
-               <motion.div 
-                 initial={{ scale: 0.8, opacity: 0 }}
-                 animate={{ scale: 1, opacity: 1 }}
-                 className="relative w-full aspect-square flex items-center justify-center p-12"
-               >
-                 <div className="absolute inset-0 bg-primary/20 blur-[150px] rounded-full animate-pulse"></div>
-                 <img src={stats.landing_asset} className="w-full h-full object-contain relative z-10" alt="Protocol Asset" />
-               </motion.div>
+                <motion.div 
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="relative w-full aspect-square flex items-center justify-center p-12"
+                >
+                  <div className="absolute inset-0 bg-primary/20 blur-[150px] rounded-full animate-pulse"></div>
+                  <img src={stats.landing_asset} className="w-full h-full object-contain relative z-10" alt="Protocol Asset" />
+                </motion.div>
              ) : (
-               <ProductGrid3D products={products} />
+                <ProductGrid3D products={products} />
              )}
           </div>
+        </div>
+
+        {/* Global Connection Heatmap */}
+        <div className="mt-32">
+           <div className="flex justify-between items-end mb-12">
+              <div className="text-left">
+                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary font-mono-custom mb-2">Global Distribution Pulse</p>
+                 <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading text-white">Network Hub Matrix</h2>
+              </div>
+              <div className="text-right">
+                 <p className="text-2xl font-black italic font-heading text-white">{stats?.active_transactions?.toLocaleString() || '0'}</p>
+                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest font-mono-custom">Active Nodes</p>
+              </div>
+           </div>
+           <GlobalHeatmap />
         </div>
 
         {/* Global Pulse Grid */}
@@ -1793,16 +1827,16 @@ function ProductsView({ user, setScreen }) {
 
 // ⸻ UTILITY COMPONENTS ⸻
 
-function FormInput({ label, type = "text", placeholder, value, onChange }) {
+function FormInput({ label, type = "text", placeholder, value, onChange, dark = true }) {
   return (
-    <div className="glass p-6 rounded-[2rem] border border-white/10 group focus-within:border-primary/50 transition-all">
-      <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2 block italic italic">{label}</label>
+    <div className={`${dark ? 'glass border-white/10' : 'bg-gray-50 border-gray-200'} p-6 rounded-[2rem] border group focus-within:border-primary/50 transition-all shadow-sm`}>
+      <label className={`text-[10px] ${dark ? 'text-gray-500' : 'text-gray-400'} uppercase font-black tracking-widest mb-2 block italic`}>{label}</label>
       <input 
         type={type} 
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-full bg-transparent outline-none font-black text-lg italic tracking-tighter text-white placeholder:text-white/10" 
+        className={`w-full bg-transparent outline-none font-black text-lg italic tracking-tighter ${dark ? 'text-white placeholder:text-white/10' : 'text-dark placeholder:text-gray-300'}`} 
       />
     </div>
   );
@@ -1869,66 +1903,123 @@ function UsageProgress({ label, current, max, prefix = "" }) {
 }
 
 function Onboarding({ onLogin, loading }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0); // 0: Welcome, 1: Details, 2: Finalize
   const [data, setData] = useState({ email: 'emmanuelobed877@gmail.com', username: '', country: 'Nigeria', accepted: false });
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-black">
-       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] -z-10"></div>
-       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[120px] -z-10"></div>
+    <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-white overflow-hidden text-dark font-sans">
+       <div className="absolute -top-24 -left-24 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10 animate-pulse"></div>
+       <div className="absolute -bottom-24 -right-24 w-[600px] h-[600px] bg-secondary/5 rounded-full blur-[120px] -z-10"></div>
        
        <motion.div 
          initial={{ y: 20, opacity: 0 }}
          animate={{ y: 0, opacity: 1 }}
-         className="glass p-12 md:p-16 rounded-[4rem] border border-white/10 w-full max-w-6xl text-left"
+         className="w-full max-w-xl text-center"
        >
-          <div className="flex items-center gap-4 mb-12">
-             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-black font-black italic font-heading">T</div>
-             <p className="text-xl font-black italic uppercase tracking-tighter font-heading text-white">Handshake Protocol</p>
+          <div className="flex flex-col items-center mb-16">
+             <div className="w-40 h-40 bg-white shadow-2xl rounded-full flex items-center justify-center mb-8 relative group">
+                <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-0 group-hover:scale-125 transition-transform duration-700"></div>
+                <Zap size={80} className="text-primary fill-primary relative animate-bounce" />
+             </div>
+             <h1 className="text-5xl font-black tracking-tighter mb-4 text-dark font-heading">Welcome to Thalexa</h1>
+             <p className="text-gray-500 text-xl font-medium font-nevera">The world's leading protocol for physical asset tokenization and verification.</p>
           </div>
       
           <AnimatePresence mode="wait">
+             {step === 0 && (
+                <motion.div key="welcome" 
+                  initial={{ opacity: 0, scale: 0.95 }} 
+                  animate={{ opacity: 1, scale: 1 }} 
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  className="space-y-6"
+                >
+                   <button 
+                     onClick={() => setStep(1)}
+                     className="w-full py-6 bg-primary text-white rounded-full font-black text-lg shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all outline-none"
+                   >
+                      Get Started
+                   </button>
+                   <div className="pt-8">
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-6 font-mono-custom">Or connect via Trusted Node</p>
+                      <div className="grid grid-cols-2 gap-4">
+                         <button 
+                           onClick={() => onLogin({ email: 'web3auth_user@thalexa.io', username: 'web3_node' })}
+                           className="flex items-center justify-center gap-3 p-4 border-2 border-gray-100 rounded-2xl hover:border-primary transition-colors hover:bg-primary/5"
+                         >
+                            <ShieldCheck size={20} className="text-blue-500" />
+                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom">Web3Auth</span>
+                         </button>
+                         <button 
+                           onClick={() => onLogin({ email: 'metamask_user@thalexa.io', username: 'mm_node' })}
+                           className="flex items-center justify-center gap-3 p-4 border-2 border-gray-100 rounded-2xl hover:border-primary transition-colors hover:bg-primary/5"
+                         >
+                            <Zap size={20} className="text-orange-500" />
+                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom">MetaMask</span>
+                         </button>
+                      </div>
+                   </div>
+                </motion.div>
+             )}
+
              {step === 1 && (
-               <motion.div key="1" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-                  <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading mb-4 text-white">Initialize <span className="text-primary">Identity</span></h2>
-                  <p className="text-gray-500 mb-10 font-medium font-nevera">Your Thalexa ID will be automatically generated upon profile creation.</p>
-                  <div className="space-y-6 mb-12">
-                     <FormInput label="Thalexa Username" placeholder="e.g. Satoshi_42" value={data.username} onChange={v => setData({...data, username: v})} />
-                     <div className="flex flex-col gap-3">
-                        <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Region Node</label>
-                        <select 
-                          value={data.country}
-                          onChange={(e) => setData({...data, country: e.target.value})}
-                          className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white"
-                        >
-                           {['Global', 'Nigeria', 'USA', 'UK', 'Germany', 'Japan', 'China'].map(c => <option key={c} value={c} className="bg-black">{c}</option>)}
-                        </select>
-                     </div>
-                  </div>
-                  <button onClick={() => setStep(2)} disabled={!data.username} className="w-full p-8 bg-white text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-primary transition-all disabled:opacity-30">Next Step</button>
-               </motion.div>
+                <motion.div key="details" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                   <div className="bg-white p-12 rounded-[3rem] border border-gray-100 shadow-2xl text-left">
+                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-dark text-center">Node <span className="text-primary">Configuration</span></h2>
+                      <div className="space-y-6 mb-12">
+                         <FormInput label="Operator Handle" placeholder="e.g. Satoshi_42" value={data.username} onChange={v => setData({...data, username: v})} dark={false} />
+                         <div className="flex flex-col gap-3">
+                            <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Region Node</label>
+                            <select 
+                              value={data.country}
+                              onChange={(e) => setData({...data, country: e.target.value})}
+                              className="w-full bg-gray-50 p-6 rounded-3xl outline-none border border-gray-200 font-black text-xs uppercase text-dark focus:border-primary transition-all"
+                            >
+                               {['Global', 'Nigeria', 'USA', 'UK', 'Germany', 'Japan', 'China'].map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                         </div>
+                      </div>
+                      <button 
+                        onClick={() => setStep(2)} 
+                        disabled={!data.username} 
+                        className="w-full p-8 bg-primary text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-orange-600 transition-all shadow-xl shadow-primary/20 disabled:opacity-30"
+                      >
+                         Continue
+                      </button>
+                   </div>
+                   <button onClick={() => setStep(0)} className="mt-8 text-gray-400 font-black uppercase text-[10px] tracking-widest font-mono-custom hover:text-primary transition-colors">← Back to start</button>
+                </motion.div>
              )}
 
              {step === 2 && (
-               <motion.div key="2" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-                  <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading mb-4 text-white">Security <br/> <span className="text-secondary">Handshake</span></h2>
-                  <p className="text-gray-500 mb-10 font-medium font-nevera">Connect your communication node and accept the Thalexa Covenant.</p>
-                  <div className="space-y-6 mb-12">
-                     <FormInput label="Contact Node (Email)" placeholder="node@protocol.io" value={data.email} onChange={v => setData({...data, email: v})} />
-                     <div className="flex items-center gap-4 p-6 glass border border-white/10 rounded-3xl cursor-pointer" onClick={() => setData({...data, accepted: !data.accepted})}>
-                        <div className={`w-6 h-6 rounded-lg border-2 border-primary flex items-center justify-center ${data.accepted ? 'bg-primary' : ''}`}>
-                           {data.accepted && <CheckCircle2 size={14} className="text-black" />}
-                        </div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 font-mono-custom">I accept the immutable protocol terms</p>
-                     </div>
-                  </div>
-                  <div className="flex gap-4">
-                     <button onClick={() => setStep(1)} className="flex-1 p-8 glass border border-white/10 rounded-3xl font-black uppercase text-xs text-white">Back</button>
-                     <button onClick={() => onLogin(data)} disabled={!data.accepted || loading} className="flex-[2] p-8 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] disabled:opacity-30 flex items-center justify-center">
-                        {loading ? <Zap className="animate-spin text-black" /> : "Authorize Node"}
-                     </button>
-                  </div>
-               </motion.div>
+                <motion.div key="finalize" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                   <div className="bg-white p-12 rounded-[3rem] border border-gray-100 shadow-2xl text-left">
+                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-dark text-center">Security <span className="text-secondary">Bind</span></h2>
+                      <div className="space-y-6 mb-12">
+                         <FormInput label="Node Communication (Email)" placeholder="node@protocol.io" value={data.email} onChange={v => setData({...data, email: v})} dark={false} />
+                         <div className="flex items-center gap-4 p-6 bg-gray-50 border border-gray-200 rounded-3xl cursor-pointer hover:border-primary transition-all" onClick={() => setData({...data, accepted: !data.accepted})}>
+                            <div className={`w-6 h-6 rounded-lg border-2 border-primary flex items-center justify-center transition-all ${data.accepted ? 'bg-primary' : ''}`}>
+                               {data.accepted && <CheckCircle2 size={14} className="text-white" />}
+                            </div>
+                            <p className="text-[10px] font-black uppercase text-gray-500 font-mono-custom flex-1">I accept the immutable protocol terms and covenant guidelines.</p>
+                         </div>
+                      </div>
+                      <div className="flex gap-4">
+                         <button 
+                           onClick={() => setStep(1)} 
+                           className="flex-1 p-8 border-2 border-gray-100 rounded-3xl font-black uppercase text-xs text-dark hover:bg-gray-50 transition-all font-mono-custom"
+                         >
+                            Back
+                         </button>
+                         <button 
+                           onClick={() => onLogin(data)} 
+                           disabled={!data.accepted || loading} 
+                           className="flex-[2] p-8 bg-primary text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] disabled:opacity-30 flex items-center justify-center shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                         >
+                            {loading ? <Zap className="animate-spin text-white" /> : "Authorize Node"}
+                         </button>
+                      </div>
+                   </div>
+                </motion.div>
              )}
           </AnimatePresence>
        </motion.div>
