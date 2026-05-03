@@ -106,11 +106,15 @@ function App() {
        if (data) {
          setUser(data);
          localStorage.setItem('thalexa_user_email', email);
+         setScreen('home');
        } else {
           // Auto-create profile if not exists
+          const idResp = await fetch('/api/ids/generate/user');
+          const { id: thalexId } = await idResp.json();
           const wallet = '0x' + Math.random().toString(16).slice(2, 42);
           const newUser = {
-            id: 'ae6d' + Math.random().toString(16).slice(2, 10),
+            id: thalexId,
+            thalexa_id: thalexId,
             email: email,
             username: loginData.username || 'user_' + Math.random().toString(36).slice(2, 7),
             country: loginData.country || 'Global',
@@ -120,14 +124,20 @@ function App() {
             is_verified: false
           };
           const { data: createdUser, error: insertError } = await supabase.from('users').insert([newUser]).select().single();
+          
+          if (insertError) throw insertError;
+
           if (createdUser) {
             setUser(createdUser);
             localStorage.setItem('thalexa_user_email', email);
+            setScreen('home');
+          } else {
+            throw new Error('Failed to synchronize identity node.');
           }
        }
-       setScreen('home');
     } catch (e) {
        console.error(e);
+       alert('Protocol Error: ' + (e.message || 'Identity synchronization failed.'));
     } finally {
        setLoading(false);
     }
