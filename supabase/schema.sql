@@ -54,6 +54,52 @@ CREATE TABLE subscriptions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Trigger to create subscription on user creation
+CREATE OR REPLACE FUNCTION create_user_subscription()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO subscriptions (user_id, plan)
+  VALUES (new.id, new.plan);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_user_created_subscription
+  AFTER INSERT ON users
+  FOR EACH ROW EXECUTE FUNCTION create_user_subscription();
+
+-- Trigger to update usage volume on transaction
+CREATE OR REPLACE FUNCTION update_usage_volume()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE subscriptions
+  SET monthly_usage_volume = monthly_usage_volume + new.amount,
+      updated_at = NOW()
+  WHERE user_id = new.user_id;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_transaction_inserted
+  AFTER INSERT ON transactions
+  FOR EACH ROW EXECUTE FUNCTION update_usage_volume();
+
+-- Trigger to update product count
+CREATE OR REPLACE FUNCTION update_product_usage()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE subscriptions
+  SET product_usage_count = product_usage_count + 1,
+      updated_at = NOW()
+  WHERE user_id = new.owner_id;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_product_inserted
+  AFTER INSERT ON products
+  FOR EACH ROW EXECUTE FUNCTION update_product_usage();
+
 -- 6. Notifications Table (Admin Mail)
 CREATE TABLE notifications (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -82,3 +128,4 @@ CREATE POLICY "Everyone can see announcements" ON notifications FOR SELECT USING
 CREATE POLICY "Admins can manage notifications" ON notifications FOR ALL USING (
   EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
 );
+CREATE POLICY "Users can view their own subscription" ON subscriptions FOR SELECT USING (auth.uid() = user_id);

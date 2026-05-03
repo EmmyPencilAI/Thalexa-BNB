@@ -688,6 +688,39 @@ function WalletView({ user, setScreen, stats }) {
   const [sendData, setSendData] = useState({ to: '', amount: '', currency: 'BNB' });
   const [swapData, setSwapData] = useState({ from: 'BNB', to: 'USDT', amount: '' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [subscription, setSubscription] = useState(null);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+       const { data } = await supabase
+         .from('subscriptions')
+         .select('*')
+         .eq('user_id', user.id)
+         .single();
+       if (data) setSubscription(data);
+    };
+    fetchSubscription();
+
+    // Real-time subscription updates
+    const channel = supabase
+      .channel('subscription_updates')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${user.id}` }, (payload) => {
+        setSubscription(payload.new);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
+  const limits = {
+    starter: { vol: 2000, reg: 0 },
+    professional: { vol: 200000, reg: 300 },
+    enterprise: { vol: 2000000, reg: 100000 }
+  };
+
+  const currentLimits = limits[user.plan] || limits.starter;
 
   const handleSend = async () => {
     if (!sendData.to || !sendData.amount) return;
@@ -869,11 +902,19 @@ function WalletView({ user, setScreen, stats }) {
       </div>
 
       <div className="lg:col-span-4 space-y-12">
-        <section className="bg-white/[0.02] p-10 rounded-[3.5rem] border border-white/5">
-           <h3 className="text-2xl font-black italic uppercase mb-8 tracking-tighter font-heading">Performance</h3>
-           <UsageProgress label="Verification Limit" current={42} max={100} />
-           <UsageProgress label="Escrow Volume" current={2500} max={10000} />
-           <UsageProgress label="Registry Health" current={98} max={100} />
+        <section className="bg-white/[0.02] p-10 rounded-[3.5rem] border border-white/5 text-left">
+           <h3 className="text-2xl font-black italic uppercase mb-8 tracking-tighter font-heading">Protocol Load</h3>
+           <UsageProgress 
+             label="Monthly Volume" 
+             current={subscription?.monthly_usage_volume || 0} 
+             max={currentLimits.vol} 
+             prefix="$"
+           />
+           <UsageProgress 
+             label="Product Registrations" 
+             current={subscription?.product_usage_count || 0} 
+             max={currentLimits.reg} 
+           />
         </section>
       </div>
     </div>
@@ -1354,19 +1395,32 @@ function AssetItem({ name, symbol, balance, value, color, icon }) {
   );
 }
 
-function UsageProgress({ label, current, max }) {
-  const percent = (current / max) * 100;
+function UsageProgress({ label, current, max, prefix = "" }) {
+  const percent = max === 0 ? 0 : Math.min((current / max) * 100, 100);
+  const isNearLimit = percent > 80;
+  const isCapped = percent >= 100;
+
+  const colorClass = isCapped ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : isNearLimit ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' : 'bg-primary shadow-[0_0_15px_rgba(0,255,133,0.5)]';
+
   return (
-    <div className="mb-6">
-      <div className="flex justify-between text-[10px] font-black mb-3 uppercase tracking-widest italic">
-        <span className="text-gray-500">{label}</span>
-        <span className="text-white">{current} / {max}</span>
+    <div className="mb-8 last:mb-0 text-left">
+      <div className="flex justify-between items-end mb-3">
+        <div className="text-left">
+          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 font-mono-custom">{label}</p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-black italic font-heading whitespace-nowrap">{prefix}{Number(current).toLocaleString()}</span>
+            <span className="text-[8px] text-gray-700 font-black uppercase font-mono-custom">/ {prefix}{max >= 1000000 ? '∞' : max.toLocaleString()}</span>
+          </div>
+        </div>
+        <span className={`text-[10px] font-black font-mono-custom ${isCapped ? 'text-red-500' : isNearLimit ? 'text-orange-500' : 'text-primary'}`}>
+          {isNaN(percent) ? 0 : percent.toFixed(0)}%
+        </span>
       </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
         <motion.div 
           initial={{ width: 0 }}
-          animate={{ width: `${percent}%` }}
-          className="h-full bg-primary"
+          animate={{ width: `${isNaN(percent) ? 0 : percent}%` }}
+          className={`h-full rounded-full transition-all duration-1000 ${colorClass}`}
         />
       </div>
     </div>
@@ -1715,9 +1769,30 @@ function SettingItem({ icon, label, onClick }) {
 function SubscriptionsView({ user, setScreen }) {
   const [loading, setLoading] = useState(null);
   const plans = [
-    { title: 'Starter Node', price: '0.00 BNB', value: 0, limit: '10 Verification/mo', features: ['Public Registry Access', 'Basic Traceability', 'Community Support'], color: 'gray' },
-    { title: 'Professional', price: '0.05 BNB', value: 50, limit: 'Unlimited Verification', features: ['MPC Wallet Identity', 'Bulk Verification API', 'Priority IPFS Sync', 'Escrow System Access'], color: 'primary' },
-    { title: 'Enterprise', price: '0.25 BNB', value: 250, limit: 'Infinite Nodes', features: ['ZK-Proof Privacy', 'Custom Smart Contracts', '24/7 Governance Support', 'White-label SDK'], color: 'secondary' },
+    { 
+      title: 'Starter', 
+      price: '$0 / mo', 
+      value: 0, 
+      limit: '$2k Vol', 
+      features: ['Wallet Creation', 'Send / Receive BNB', 'Basic Verification', 'Public Registry Scan'], 
+      color: 'gray' 
+    },
+    { 
+      title: 'Professional', 
+      price: '$500 / mo', 
+      value: 500, 
+      limit: '$200k Vol', 
+      features: ['300 Product Reg/mo', 'Escrow Payments', 'API Access (Basic)', 'Priority Support', 'Multi-wallet Support'], 
+      color: 'primary' 
+    },
+    { 
+      title: 'Enterprise', 
+      price: '$2000 / mo', 
+      value: 2000, 
+      limit: 'Custom Vol', 
+      features: ['Unlimited Product Reg', 'Custom Smart Contracts', 'White-label Portals', 'Team Roles & SLA', 'Advanced Analytics'], 
+      color: 'secondary' 
+    },
   ];
 
   const handleUpgrade = async (plan) => {
