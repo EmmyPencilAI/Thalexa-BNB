@@ -15,10 +15,12 @@ import {
   Menu,
   LogOut,
   User,
-  Zap
+  Zap,
+  CreditCard
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Mock Supabase - In production, these should be from env vars
 const supabaseUrl = 'https://your-project.supabase.co';
@@ -38,12 +40,17 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Initial Auth Check logic would go here
+    // Check for payment redirect status
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_status') === 'success') {
+      alert('Payment Successful! Reference: ' + params.get('reference'));
+      // Clear URL
+      window.history.replaceState({}, document.title, "/");
+    }
   }, []);
 
   const handleLogin = () => {
     setLoading(true);
-    // Simulate Web3Auth + Supabase Login
     setTimeout(() => {
       setUser({
         id: 'user_123',
@@ -61,17 +68,18 @@ function App() {
     switch (screen) {
       case 'onboarding': return <Onboarding onLogin={handleLogin} loading={loading} />;
       case 'wallet': return <WalletView user={user} setScreen={setScreen} />;
-      case 'send': return <SendView setScreen={setScreen} />;
-      case 'receive': return <ReceiveView user={user} setScreen={setScreen} />;
+      case 'escrow': return <EscrowDashboard user={user} setScreen={setScreen} />;
+      case 'create-escrow': return <CreateEscrowView setScreen={setScreen} />;
       case 'products': return <ProductsView setScreen={setScreen} />;
       case 'settings': return <SettingsView user={user} setScreen={setScreen} setUser={setUser} />;
       case 'admin': return <AdminView setScreen={setScreen} />;
+      case 'subscriptions': return <SubscriptionsView user={user} setScreen={setScreen} />;
       default: return <WalletView user={user} />;
     }
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <AnimatePresence mode="wait">
         <motion.div
           key={screen}
@@ -84,11 +92,11 @@ function App() {
         </motion.div>
       </AnimatePresence>
 
-      {user && screen !== 'onboarding' && (
+      {user && !['onboarding'].includes(screen) && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass border-t border-white/5 py-4 px-8 flex justify-between items-center z-50">
           <NavItem icon={<Wallet />} active={screen === 'wallet'} onClick={() => setScreen('wallet')} />
-          <NavItem icon={<Search />} active={screen === 'products'} onClick={() => setScreen('products')} />
-          <NavItem icon={<QrCode />} active={screen === 'scan'} onClick={() => {}} />
+          <NavItem icon={<ShieldCheck />} active={screen === 'escrow'} onClick={() => setScreen('escrow')} />
+          <NavItem icon={<Zap />} active={screen === 'products'} onClick={() => setScreen('products')} />
           <NavItem icon={<Settings />} active={screen === 'settings'} onClick={() => setScreen('settings')} />
         </nav>
       )}
@@ -155,9 +163,6 @@ function WalletView({ user, setScreen }) {
           </div>
         </div>
         <div className="flex gap-2">
-           {user.role === 'admin' && (
-             <div className="px-2 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-lg border border-green-500/20">ADMIN</div>
-           )}
            <div className="px-2 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-lg border border-primary/20 uppercase">{user.plan}</div>
         </div>
       </header>
@@ -168,8 +173,8 @@ function WalletView({ user, setScreen }) {
         <h2 className="text-5xl font-bold mb-8">$12,450.00</h2>
         
         <div className="flex gap-4">
-          <ActionButton onClick={() => setScreen('send')} icon={<ArrowUpRight />} label="Send" />
-          <ActionButton onClick={() => setScreen('receive')} icon={<ArrowDownLeft />} label="Receive" />
+          <ActionButton onClick={() => alert('Send Placeholder')} icon={<ArrowUpRight />} label="Send" />
+          <ActionButton onClick={() => alert('Receive Placeholder')} icon={<ArrowDownLeft />} label="Receive" />
         </div>
       </div>
 
@@ -245,9 +250,131 @@ function UsageProgress({ label, current, max }) {
   );
 }
 
+function EscrowDashboard({ user, setScreen }) {
+  const escrows = [
+    { id: '1', role: 'sender', amount: '2.5 BNB', status: 'funded', receiver: '0x12...3456', product: 'Luxury Watch X1' },
+    { id: '2', role: 'receiver', amount: '0.8 BNB', status: 'completed', sender: '0xab...cd90', product: 'Vintage Camera' },
+  ];
+
+  return (
+    <div className="p-6 pb-24">
+      <header className="flex justify-between items-center mb-8">
+        <h2 className="text-3xl font-bold font-display">Escrow</h2>
+        <button 
+          onClick={() => setScreen('create-escrow')}
+          className="bg-primary text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"
+        >
+          <Zap size={16} /> New Escrow
+        </button>
+      </header>
+
+      <div className="space-y-4">
+        {escrows.map((e) => (
+          <div key={e.id} className="glass p-5 rounded-[2rem] border-l-4 border-primary">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">{e.role} • {e.product}</p>
+                <p className="text-lg font-bold">{e.amount}</p>
+              </div>
+              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${e.status === 'funded' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-500'}`}>
+                {e.status}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center mt-2">
+              <p className="text-xs text-gray-400 font-mono italic">
+                {e.role === 'sender' ? `To: ${e.receiver}` : `From: ${e.sender}`}
+              </p>
+              {e.role === 'sender' && e.status === 'funded' && (
+                <button className="bg-secondary text-black px-3 py-1 rounded-lg text-[10px] font-bold">Release Funds</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CreateEscrowView({ setScreen }) {
+  const [loading, setLoading] = useState(false);
+  
+  const handlePaystackDeposit = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'emmanuelobed877@gmail.com',
+          amount: 5000, 
+          metadata: { type: 'escrow_funding' }
+        })
+      });
+      const data = await res.json();
+      if (data.status && data.data.authorization_url) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Failed to initialize Paystack: ' + (data.message || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to backend for Paystack');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="p-6 h-screen flex flex-col">
+      <header className="flex items-center gap-4 mb-8">
+        <button onClick={() => setScreen('escrow')} className="p-2 glass rounded-xl"><ArrowDownLeft className="rotate-45" /></button>
+        <h2 className="text-2xl font-bold">Create Escrow</h2>
+      </header>
+
+      <div className="space-y-6 flex-1">
+        <div className="glass p-5 rounded-2xl">
+          <label className="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Receiver Address</label>
+          <input type="text" className="w-full bg-transparent outline-none font-mono text-sm" placeholder="0x..." />
+        </div>
+
+        <div className="glass p-5 rounded-2xl">
+          <label className="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Amount (BNB)</label>
+          <input type="number" className="w-full bg-transparent outline-none text-2xl font-bold" placeholder="0.00" />
+        </div>
+
+        <div className="glass p-5 rounded-2xl">
+          <label className="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Product Code (Optional)</label>
+          <input type="text" className="w-full bg-transparent outline-none text-sm" placeholder="GG_THLX_..." />
+        </div>
+      </div>
+
+      <div className="space-y-4 pt-6">
+        <button className="w-full bg-primary text-black font-bold py-5 rounded-2xl flex items-center justify-center gap-2">
+          <Wallet size={20} /> Create with Wallet
+        </button>
+        
+        <div className="relative flex items-center py-2">
+           <div className="flex-grow border-t border-white/10"></div>
+           <span className="flex-shrink mx-4 text-gray-500 text-[10px] font-bold uppercase">or fund via paystack</span>
+           <div className="flex-grow border-t border-white/10"></div>
+        </div>
+
+        <button 
+           onClick={handlePaystackDeposit}
+           disabled={loading}
+           className="w-full glass py-5 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-white/5 transition-all text-sm"
+        >
+          {loading ? <Zap className="animate-spin" /> : <><CreditCard size={20} className="text-primary"/> Deposit NGN to Escrow</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProductsView({ setScreen }) {
   const [search, setSearch] = useState('');
   const [result, setResult] = useState(null);
+  const [showRegister, setShowRegister] = useState(false);
 
   const handleVerify = () => {
     if (search === 'GG_THLX_000042') {
@@ -259,60 +386,92 @@ function ProductsView({ setScreen }) {
 
   return (
     <div className="p-6 pb-24">
-       <h2 className="text-3xl font-bold mb-8">Verification</h2>
-       
-       <div className="relative mb-10">
-          <input 
-            type="text" 
-            placeholder="Enter Product Code..."
-            className="w-full glass bg-white/5 p-5 rounded-2xl outline-none focus:border-primary transition-all font-bold"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+       <header className="flex justify-between items-center mb-8">
+          <h2 className="text-3xl font-bold">Verification</h2>
           <button 
-            onClick={handleVerify}
-            className="absolute right-3 top-3 bg-primary text-black p-2 rounded-xl"
+            onClick={() => setShowRegister(!showRegister)}
+            className="p-3 glass rounded-2xl text-primary"
           >
-            <Search size={24} />
+            {showRegister ? <Search size={20} /> : <Zap size={20} />}
           </button>
-       </div>
-
-       {result && (
-         <motion.div 
-           initial={{ y: 20, opacity: 0 }}
-           animate={{ y: 0, opacity: 1 }}
-           className={`p-8 rounded-[2rem] border-2 text-center ${result.status === 'authentic' ? 'border-secondary/20 bg-secondary/5' : 'border-red-500/20 bg-red-500/5'}`}
-         >
-           {result.status === 'authentic' ? (
-             <>
-               <div className="w-20 h-20 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                 <CheckCircle2 size={48} className="text-secondary" />
-               </div>
-               <h3 className="text-2xl font-bold text-secondary mb-2 uppercase italic tracking-tighter">Authentic</h3>
-               <p className="text-xl font-bold">{result.name}</p>
-               <p className="text-gray-400 text-sm">Verified by BNB Chain Proof</p>
-             </>
-           ) : (
-             <>
-               <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                 <AlertCircle size={48} className="text-red-500" />
-               </div>
-               <h3 className="text-2xl font-bold text-red-500 mb-2 uppercase">Unverified</h3>
-               <p className="text-gray-400 text-sm">This code does not match any registered product.</p>
-             </>
-           )}
+       </header>
+       
+       {showRegister ? (
+         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <h3 className="text-xl font-bold font-display tracking-tight">Register New Product</h3>
+            <div className="glass p-5 rounded-2xl">
+              <label className="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Product Name</label>
+              <input type="text" className="w-full bg-transparent outline-none font-bold" placeholder="e.g. Luxury Handbag" />
+            </div>
+            <div className="glass p-5 rounded-2xl">
+              <label className="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Batch Serial</label>
+              <input type="text" className="w-full bg-transparent outline-none font-bold" placeholder="GG_THLX_..." />
+            </div>
+            <button className="w-full bg-primary text-black font-bold py-5 rounded-2xl">Create On-Chain Record</button>
          </motion.div>
+       ) : (
+         <>
+           <div className="relative mb-10">
+              <input 
+                type="text" 
+                placeholder="Search Product Code..."
+                className="w-full glass bg-white/5 p-5 rounded-2xl outline-none focus:border-primary transition-all font-bold"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <button 
+                onClick={handleVerify}
+                className="absolute right-3 top-3 bg-primary text-black p-2 rounded-xl"
+              >
+                <Search size={24} />
+              </button>
+           </div>
+
+           {result && (
+             <motion.div 
+               initial={{ y: 20, opacity: 0 }}
+               animate={{ y: 0, opacity: 1 }}
+               className={`p-8 rounded-[2rem] border-2 text-center ${result.status === 'authentic' ? 'border-secondary/20 bg-secondary/5' : 'border-red-500/20 bg-red-500/5'}`}
+             >
+               {result.status === 'authentic' ? (
+                 <>
+                   <div className="w-20 h-20 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <CheckCircle2 size={48} className="text-secondary" />
+                   </div>
+                   <h3 className="text-2xl font-bold text-secondary mb-2 uppercase italic tracking-tighter">Authentic</h3>
+                   <p className="text-xl font-bold">{result.name}</p>
+                   <p className="text-gray-400 text-sm mb-6">Verified by BNB Chain Proof</p>
+                   <div className="bg-white p-4 rounded-3xl w-fit mx-auto shadow-xl">
+                      <QRCodeSVG value={`https://thalexa.com/verify/${search}`} size={128} />
+                   </div>
+                   <p className="mt-4 text-[10px] text-gray-500 font-mono italic">SCAN TO VERIFY OWNERSHIP</p>
+                 </>
+               ) : (
+                 <>
+                   <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <AlertCircle size={48} className="text-red-500" />
+                   </div>
+                   <h3 className="text-2xl font-bold text-red-500 mb-2 uppercase">Unverified</h3>
+                   <p className="text-gray-400 text-sm">This code does not match any registered product.</p>
+                 </>
+               )}
+             </motion.div>
+           )}
+         </>
        )}
 
        <div className="mt-12">
-          <h3 className="font-bold mb-4">Recent Products</h3>
+          <h3 className="font-bold mb-4">Inventory</h3>
           <div className="space-y-3">
              <div className="glass p-4 rounded-2xl flex items-center justify-between">
-                <div>
-                   <p className="text-sm font-bold">GG_THLX_1120</p>
-                   <p className="text-[10px] text-gray-500">2 days ago</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary italic font-black">X</div>
+                  <div>
+                    <p className="text-sm font-bold">Luxury Watch X1</p>
+                    <p className="text-[10px] text-gray-500">GG_THLX_000042</p>
+                  </div>
                 </div>
-                <div className="text-secondary text-[10px] font-bold">VERIFIED</div>
+                <div className="text-secondary text-[10px] font-bold px-2 py-1 bg-secondary/10 rounded-lg">LIVE</div>
              </div>
           </div>
        </div>
@@ -331,34 +490,33 @@ function AdminView({ setScreen }) {
     <div className="p-6 pb-24">
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => setScreen('wallet')} className="p-2 glass rounded-xl"><ArrowDownLeft className="rotate-45" /></button>
-        <h2 className="text-3xl font-bold">Admin Panel</h2>
+        <h2 className="text-3xl font-bold font-display">System Admin</h2>
       </div>
 
       <div className="space-y-6">
         <section>
-          <h3 className="text-xs font-bold text-gray-500 uppercase mb-4">System Stats</h3>
           <div className="grid grid-cols-2 gap-4">
-             <div className="glass p-4 rounded-2xl">
-                <p className="text-[10px] text-gray-500 font-bold uppercase">Total Escrows</p>
-                <p className="text-2xl font-bold">1,240</p>
+             <div className="glass p-5 rounded-[2rem]">
+                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Escrows</p>
+                <p className="text-3xl font-black">1,240</p>
              </div>
-             <div className="glass p-4 rounded-2xl">
-                <p className="text-[10px] text-gray-500 font-bold uppercase">Volume (BNB)</p>
-                <p className="text-2xl font-bold">452.5</p>
+             <div className="glass p-5 rounded-[2rem]">
+                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Volume (BNB)</p>
+                <p className="text-3xl font-black">452.5</p>
              </div>
           </div>
         </section>
 
         <section>
-          <h3 className="text-xs font-bold text-gray-500 uppercase mb-4">Users</h3>
+          <h3 className="text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">Global Users</h3>
           <div className="space-y-3">
              {users.map((u, i) => (
                 <div key={i} className="glass p-4 rounded-2xl flex justify-between items-center">
                    <div>
-                      <p className="font-bold text-sm">{u.email}</p>
+                      <p className="font-bold text-sm tracking-tight">{u.email}</p>
                       <p className="text-[10px] text-primary font-bold uppercase">{u.role}</p>
                    </div>
-                   <div className="w-2 h-2 bg-secondary rounded-full"></div>
+                   <div className="w-2 h-2 bg-secondary rounded-full shadow-[0_0_8px_rgba(0,255,133,0.5)]"></div>
                 </div>
              ))}
           </div>
@@ -374,7 +532,7 @@ function SettingsView({ user, setScreen, setUser }) {
       <h2 className="text-3xl font-bold mb-8">Settings</h2>
       
       <div className="glass p-6 rounded-[2rem] mb-6">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-8">
           <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-primary text-2xl font-bold">
             {user.email[0].toUpperCase()}
           </div>
@@ -384,13 +542,14 @@ function SettingsView({ user, setScreen, setUser }) {
           </div>
         </div>
         
-        <div className="space-y-4">
+        <div className="space-y-2">
           <SettingItem icon={<ShieldCheck />} label="Backup Wallet (MPC)" onClick={() => alert('MPC Key: 0x...')} />
+          <SettingItem icon={<Zap />} label="Subscription & Billing" onClick={() => setScreen('subscriptions')} />
           {user.role === 'admin' && (
             <SettingItem icon={<LayoutDashboard />} label="Admin Dashboard" onClick={() => setScreen('admin')} />
           )}
-          <SettingItem icon={<History />} label="Transaction History" />
-          <SettingItem icon={<User />} label="Profile Verification" />
+          <SettingItem icon={<History />} label="Activity Log" />
+          <SettingItem icon={<User />} label="KYC Verification" />
         </div>
       </div>
 
@@ -408,11 +567,51 @@ function SettingItem({ icon, label, onClick }) {
   return (
     <button 
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl transition-all"
+      className="w-full flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all"
     >
       <div className="text-primary">{icon}</div>
-      <span className="font-medium">{label}</span>
+      <span className="font-bold text-sm">{label}</span>
     </button>
+  );
+}
+
+function SubscriptionsView({ user, setScreen }) {
+  const plans = [
+    { title: 'Starter', price: '$0', limit: '$2,000/mo', color: 'gray' },
+    { title: 'Professional', price: '$500', limit: '$200,000/mo', color: 'primary' },
+    { title: 'Enterprise', price: '$2,000', limit: 'Unlimited', color: 'secondary' },
+  ];
+
+  return (
+    <div className="p-6">
+       <header className="flex items-center gap-4 mb-8">
+        <button onClick={() => setScreen('settings')} className="p-2 glass rounded-xl"><ArrowDownLeft className="rotate-45" /></button>
+        <h2 className="text-2xl font-bold">Billing</h2>
+      </header>
+
+      <div className="space-y-6">
+        {plans.map((p) => (
+          <div key={p.title} className={`p-6 rounded-[2.5rem] border ${user.plan === p.title.toLowerCase() ? 'border-primary bg-primary/5' : 'border-white/5 glass'}`}>
+             <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold">{p.title}</h3>
+                  <p className="text-gray-500 text-sm italic">{p.limit} volume</p>
+                </div>
+                <div className="text-right">
+                   <p className="text-3xl font-black tracking-tighter">{p.price}</p>
+                   <p className="text-[10px] text-gray-500 uppercase font-bold">Per month</p>
+                </div>
+             </div>
+             
+             {user.plan === p.title.toLowerCase() ? (
+               <div className="w-full py-4 text-center text-primary font-bold bg-primary/10 rounded-2xl text-sm">Current Active Plan</div>
+             ) : (
+               <button className="w-full py-4 bg-white/5 hover:bg-white/10 transition-all rounded-2xl font-bold text-sm">Upgrade Now</button>
+             )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
