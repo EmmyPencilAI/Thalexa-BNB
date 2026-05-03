@@ -54,15 +54,31 @@ CREATE TABLE subscriptions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. Notifications Table (Admin Mail)
+CREATE TABLE notifications (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  type TEXT DEFAULT 'announcement', -- 'announcement', 'personal'
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  sender_id UUID REFERENCES users(id),
+  target_user_id UUID, -- NULL for all users
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable RLS
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE escrows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 CREATE POLICY "Users can view their own data" ON users FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can view their own transactions" ON transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Anyone can verify a product" ON products FOR SELECT USING (true);
 CREATE POLICY "Owners can manage their products" ON products FOR ALL USING (auth.uid() = owner_id);
+CREATE POLICY "Everyone can see announcements" ON notifications FOR SELECT USING (type = 'announcement' OR target_user_id = auth.uid());
+CREATE POLICY "Admins can manage notifications" ON notifications FOR ALL USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+);

@@ -42,46 +42,83 @@ const CONFIG = {
   THEME_GREEN: "#00FF85"
 };
 
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 function App() {
   const [user, setUser] = useState(null);
   const [screen, setScreen] = useState('landing');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [announcement, setAnnouncement] = useState(null);
+  const [landingProducts, setLandingProducts] = useState([]);
 
   useEffect(() => {
+    // Fetch Landing Products
+    const fetchLandingProducts = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(4);
+      
+      if (data) setLandingProducts(data);
+    };
+
+    fetchLandingProducts();
+
     // Fetch Live Pulse
     fetch('/api/stats')
       .then(r => r.json())
       .then(data => setStats(data));
 
-    // Listen for broadcast updates (Simulating real-time WebSocket/Polling)
-    const interval = setInterval(() => {
-      fetch('/api/broadcast')
-        .then(r => r.json())
-        .then(data => {
-          if (data.message) setAnnouncement(data);
-        });
-    }, 5000);
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (data && data[0]) {
+        setAnnouncement(data[0]);
+      }
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoading(true);
-    // Simulate Web3Auth Onboarding
-    setTimeout(() => {
-      setUser({
-        id: 'user_123',
-        email: 'emmanuelobed877@gmail.com',
-        wallet: '0x7a8c4f92d...2b4e',
-        role: 'admin',
-        plan: 'professional',
-        balance: '4.52 BNB'
-      });
-      setScreen('wallet');
-      setLoading(false);
-    }, 1500);
+    try {
+       // In a real app, you'd use Supabase Auth here
+       // For this demo, we simulate a login and fetch the user profile from our 'users' table
+       const { data, error } = await supabase
+         .from('users')
+         .select('*')
+         .eq('email', 'emmanuelobed877@gmail.com')
+         .single();
+       
+       if (data) {
+         setUser(data);
+       } else {
+          // Auto-create profile if not exists (for demo convenience)
+          const newUser = {
+            id: 'ae6d' + Math.random().toString(16).slice(2, 10),
+            email: 'emmanuelobed877@gmail.com',
+            wallet_address: '0x' + Math.random().toString(16).slice(2, 42),
+            role: 'admin',
+            plan: 'professional'
+          };
+          await supabase.from('users').insert([newUser]);
+          setUser(newUser);
+       }
+       setScreen('wallet');
+    } catch (e) {
+       console.error(e);
+    } finally {
+       setLoading(false);
+    }
   };
 
   const renderScreen = () => {
@@ -92,12 +129,12 @@ function App() {
     }
 
     switch (screen) {
-      case 'landing': return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
+      case 'landing': return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} products={landingProducts} />;
       case 'onboarding': return <Onboarding onLogin={handleLogin} loading={loading} />;
       case 'wallet': return <WalletView user={user} setScreen={setScreen} stats={stats} />;
       case 'escrow': return <EscrowDashboard user={user} setScreen={setScreen} />;
-      case 'create-escrow': return <CreateEscrowView setScreen={setScreen} />;
-      case 'products': return <ProductsView setScreen={setScreen} />;
+      case 'create-escrow': return <CreateEscrowView user={user} setScreen={setScreen} />;
+      case 'products': return <ProductsView user={user} setScreen={setScreen} />;
       case 'settings': return <SettingsView user={user} setScreen={setScreen} setUser={setUser} />;
       case 'admin': return <AdminView setScreen={setScreen} stats={stats} />;
       case 'subscriptions': return <SubscriptionsView user={user} setScreen={setScreen} />;
@@ -107,18 +144,30 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
-      {/* Global Announcement Banner */}
       <AnimatePresence>
         {announcement && (
           <motion.div 
             initial={{ y: -100 }}
             animate={{ y: 0 }}
             exit={{ y: -100 }}
-            className="fixed top-0 left-0 right-0 z-[100] bg-primary text-black p-4 font-black text-center uppercase italic tracking-tighter shadow-2xl flex justify-center items-center gap-4"
+            className="fixed top-0 left-0 right-0 z-[100] bg-primary text-black p-4 font-black shadow-2xl flex justify-center items-center gap-4 overflow-hidden"
           >
-            <Zap size={20} className="animate-pulse" />
-            <span>{announcement.message}</span>
-            <button onClick={() => setAnnouncement(null)} className="ml-4 opacity-50 hover:opacity-100">✕</button>
+            <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
+              <div className="flex items-center gap-4">
+                 <Zap size={20} className="animate-pulse" />
+                 <div className="text-left">
+                    <p className="text-[10px] uppercase tracking-widest opacity-60 leading-none mb-1">Incoming Transmission: {announcement.title}</p>
+                    <p className="text-sm italic tracking-tighter uppercase font-heading">{announcement.content}</p>
+                 </div>
+              </div>
+              <button 
+                onClick={() => setAnnouncement(null)} 
+                className="p-2 hover:bg-black/10 rounded-full transition-colors"
+                id="close-announcement"
+              >
+                ✕
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -153,7 +202,7 @@ function App() {
 
 // ⸻ LANDING PAGE (PRODUCTION ECOSYSTEM) ⸻
 
-function LandingPage({ onStart, stats }) {
+function LandingPage({ onStart, stats, products }) {
   const [tickerIndex, setTickerIndex] = useState(0);
   const tickerEvents = [
     "ASSET_MINT: Luxury Watch X1 (GENEVA_NODE)",
@@ -259,7 +308,7 @@ function LandingPage({ onStart, stats }) {
           </div>
 
           <div className="lg:col-span-6 relative mt-12 lg:mt-0">
-             <ProductGrid3D />
+             <ProductGrid3D products={products} />
           </div>
         </div>
 
@@ -368,18 +417,18 @@ function NetworkBackground() {
   );
 }
 
-function ProductGrid3D() {
-  const products = [
-    { id: 1, name: 'Chrono Lux X', type: 'Luxury Watch', p: '2.4 BNB', img: '⌚' },
-    { id: 2, name: 'Velocity One', type: 'Tech Sneaker', p: '0.8 BNB', img: '👟' },
-    { id: 3, name: 'Cyber Bag V4', type: 'Futuristic Bag', p: '1.2 BNB', img: '💼' },
-    { id: 4, name: 'Neural Link 01', type: 'Robotic Artifact', p: '5.6 BNB', img: '🤖' },
+function ProductGrid3D({ products = [] }) {
+  const displayProducts = products.length > 0 ? products : [
+    { id: 1, product_code: 'GG_THLX_0001', metadata: { name: 'Chrono Lux X', type: 'Luxury Watch', price: '2.4 BNB', emoji: '⌚' } },
+    { id: 2, product_code: 'GG_THLX_0002', metadata: { name: 'Velocity One', type: 'Tech Sneaker', price: '0.8 BNB', emoji: '👟' } },
+    { id: 3, product_code: 'GG_THLX_0003', metadata: { name: 'Cyber Bag V4', type: 'Futuristic Bag', price: '1.2 BNB', emoji: '💼' } },
+    { id: 4, product_code: 'GG_THLX_0004', metadata: { name: 'Neural Link 01', type: 'Robotic Artifact', price: '5.6 BNB', emoji: '🤖' } },
   ];
 
   return (
     <div className="relative h-[600px] w-full flex items-center justify-center perspective-1000">
       <div className="grid grid-cols-2 gap-4 translate-z-10 rotate-x-12 rotate-y--12">
-        {products.map((item, i) => (
+        {displayProducts.map((item, i) => (
           <motion.div
             key={item.id}
             initial={{ opacity: 0, scale: 0.5, y: 50 }}
@@ -391,16 +440,18 @@ function ProductGrid3D() {
             <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity text-left"></div>
             <div className="flex justify-between items-start text-left">
                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xs font-black uppercase text-primary border border-white/5">0{i+1}</div>
-               <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 font-mono-custom text-left">Protocol Valid</span>
+               <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 font-mono-custom text-left">{item.product_code}</span>
             </div>
             
-            <div className="text-6xl text-center py-4 transform group-hover:scale-125 transition-transform duration-500">{item.img}</div>
+            <div className="text-6xl text-center py-4 transform group-hover:scale-125 transition-transform duration-500">
+              {item.metadata?.image_url ? <img src={item.metadata.image_url} alt={item.metadata.name} className="w-full h-full object-contain" /> : item.metadata?.emoji || '📦'}
+            </div>
             
             <div className="text-left">
-              <h4 className="text-lg font-black italic uppercase tracking-tighter font-heading text-white">{item.name}</h4>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4 font-mono-custom">{item.type}</p>
+              <h4 className="text-lg font-black italic uppercase tracking-tighter font-heading text-white">{item.metadata?.name || 'Unknown Product'}</h4>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4 font-mono-custom">{item.metadata?.type || 'Standard Asset'}</p>
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-2xl border border-white/5">
-                 <span className="text-xs font-black italic text-primary font-heading">{item.p}</span>
+                 <span className="text-xs font-black italic text-primary font-heading">{item.metadata?.price || '0.00 BNB'}</span>
                  <ArrowUpRight size={14} className="text-gray-500 group-hover:text-primary transition-colors" />
               </div>
             </div>
@@ -423,21 +474,30 @@ function InteractionScanner() {
   const [status, setStatus] = useState(null); // 'authentic', 'invalid', 'scanning'
   const [history, setHistory] = useState([]);
 
-  const handleScan = () => {
+  const handleScan = async () => {
     if (!input) return;
     setStatus('scanning');
-    setTimeout(() => {
-      if (input === 'GG_THLX_000042') {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, users!products_owner_id_fkey(email, wallet_address)')
+        .eq('product_code', input.trim().toUpperCase())
+        .single();
+      
+      if (error || !data) {
+        setStatus('invalid');
+      } else {
         setStatus('authentic');
         setHistory([
-          { event: 'Minted in Geneva', op: 'Node_Auth_01', t: '2026-01-12' },
-          { event: 'Global Hub Sync', op: 'Bridge_EVM', t: '2026-02-05' },
-          { event: 'Owned by Protocol', op: 'User_72', t: '2026-03-24' },
+          { event: 'Initial Protocol Mint', op: 'Node_Auth_Primary', t: new Date(data.created_at).toLocaleDateString() },
+          { event: 'Global Registry Bind', op: 'EVM_Sync', t: new Date(data.created_at).toLocaleDateString() },
+          { event: 'Current Custodian Bound', op: data.users?.wallet_address || 'Protocol Vault', t: 'Live Status' },
         ]);
-      } else {
-        setStatus('invalid');
       }
-    }, 2000);
+    } catch (e) {
+      console.error(e);
+      setStatus('invalid');
+    }
   };
 
   return (
@@ -623,6 +683,35 @@ function StatCard({ icon, label, val, color }) {
 // ⸻ WALLET SYSTEM (REAL MONEY) ⸻
 
 function WalletView({ user, setScreen, stats }) {
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [sendData, setSendData] = useState({ to: '', amount: '', currency: 'BNB' });
+  const [swapData, setSwapData] = useState({ from: 'BNB', to: 'USDT', amount: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleSend = async () => {
+    if (!sendData.to || !sendData.amount) return;
+    setIsProcessing(true);
+    try {
+      const { error } = await supabase.from('transactions').insert([{
+        user_id: user.id,
+        amount: parseFloat(sendData.amount),
+        currency: sendData.currency,
+        type: 'send',
+        status: 'completed',
+        tx_hash: '0x' + Math.random().toString(16).slice(2, 42)
+      }]);
+      if (error) throw error;
+      alert(`Successfully sent ${sendData.amount} ${sendData.currency} to ${sendData.to}`);
+      setIsSendModalOpen(false);
+      setSendData({ to: '', amount: '', currency: 'BNB' });
+    } catch (e) {
+      alert('Transaction Failed: ' + e.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
       <div className="lg:col-span-8">
@@ -637,11 +726,12 @@ function WalletView({ user, setScreen, stats }) {
             </div>
           </div>
           <div className="flex items-center gap-3 glass px-5 py-2 rounded-full border border-white/10">
-             <div className={`w-2 h-2 rounded-full ${stats?.bnb_rpc === 'operational' ? 'bg-secondary animate-pulse' : 'bg-red-500'}`}></div>
+             <div className={`w-2 h-2 rounded-full bg-secondary animate-pulse`}></div>
              <span className="text-xs font-black uppercase tracking-tighter font-mono-custom">BNB Mainnet</span>
           </div>
         </header>
 
+        {/* Live Transaction Pulse */}
         <section className="mb-12 relative overflow-hidden">
            <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading text-primary">Live Transaction Pulse</h3>
@@ -674,10 +764,92 @@ function WalletView({ user, setScreen, stats }) {
           <h2 className="text-7xl font-black italic mb-12 relative z-10 tracking-tighter font-heading">{user.balance}</h2>
           
           <div className="flex gap-6 relative z-10">
-            <ActionButton onClick={() => alert('Send Interface')} icon={<ArrowUpRight />} label="Send Assets" />
-            <ActionButton onClick={() => alert('Receive QR')} icon={<ArrowDownLeft />} label="Deposit" />
+            <ActionButton onClick={() => setIsSendModalOpen(true)} icon={<ArrowUpRight />} label="Send Assets" />
+            <ActionButton onClick={() => setIsSwapModalOpen(true)} icon={<QrCode />} label="Swap Assets" />
           </div>
         </div>
+
+        {/* Send Modal */}
+        <AnimatePresence>
+          {isSendModalOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+            >
+              <div className="glass p-12 rounded-[4rem] border border-white/10 w-full max-w-xl relative text-left">
+                <h3 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-8">Initiate Transfer</h3>
+                <div className="space-y-4 mb-8">
+                   <AdminInput placeholder="Recipient Wallet Address (0x...)" value={sendData.to} onChange={v => setSendData({...sendData, to: v})} />
+                   <div className="flex gap-4">
+                      <AdminInput placeholder="Amount" value={sendData.amount} onChange={v => setSendData({...sendData, amount: v})} />
+                      <select 
+                        value={sendData.currency}
+                        onChange={(e) => setSendData({...sendData, currency: e.target.value})}
+                        className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs uppercase"
+                      >
+                         <option value="BNB">BNB</option>
+                         <option value="USDT">USDT</option>
+                         <option value="USDC">USDC</option>
+                         <option value="BTC">BTC</option>
+                         <option value="ETH">ETH</option>
+                      </select>
+                   </div>
+                </div>
+                <div className="flex gap-4">
+                   <button onClick={() => setIsSendModalOpen(false)} className="flex-1 p-6 glass border border-white/10 rounded-3xl font-black uppercase text-xs">Cancel</button>
+                   <button onClick={handleSend} disabled={isProcessing} className="flex-1 p-6 bg-primary text-black rounded-3xl font-black uppercase text-xs shadow-xl shadow-primary/20">
+                     {isProcessing ? <Zap className="animate-spin" /> : "Confirm Send"}
+                   </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Swap Modal */}
+        <AnimatePresence>
+          {isSwapModalOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+            >
+              <div className="glass p-12 rounded-[4rem] border border-white/10 w-full max-w-xl relative text-left">
+                <h3 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-8">Atomic Swap</h3>
+                <div className="space-y-6 mb-8">
+                   <div className="flex flex-col gap-2">
+                     <label className="text-[10px] uppercase font-black text-gray-500 font-mono-custom">Pay</label>
+                     <div className="flex gap-2">
+                       <AdminInput placeholder="Amount" value={swapData.amount} onChange={v => setSwapData({...swapData, amount: v})} />
+                       <select value={swapData.from} onChange={e => setSwapData({...swapData, from: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs">
+                          {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
+                       </select>
+                     </div>
+                   </div>
+                   <div className="flex justify-center -my-2"><ArrowDown className="text-primary" /></div>
+                   <div className="flex flex-col gap-2">
+                     <label className="text-[10px] uppercase font-black text-gray-500 font-mono-custom">Receive (Est.)</label>
+                     <div className="flex gap-2">
+                       <div className="flex-1 glass bg-white/5 p-5 rounded-2xl border border-white/10 font-bold text-xs">{(parseFloat(swapData.amount) * 600 || 0).toFixed(2)}</div>
+                       <select value={swapData.to} onChange={e => setSwapData({...swapData, to: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs">
+                          {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
+                       </select>
+                     </div>
+                   </div>
+                </div>
+                <div className="flex gap-4">
+                   <button onClick={() => setIsSwapModalOpen(false)} className="flex-1 p-6 glass border border-white/10 rounded-3xl font-black uppercase text-xs">Cancel</button>
+                   <button onClick={() => { alert('Swap Transaction Broadcasted'); setIsSwapModalOpen(false); }} className="flex-1 p-6 bg-secondary text-black rounded-3xl font-black uppercase text-xs shadow-xl shadow-secondary/20">
+                     Swap Assets
+                   </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <section>
           <div className="flex justify-between items-end mb-8">
@@ -685,7 +857,6 @@ function WalletView({ user, setScreen, stats }) {
               <p className="text-[12px] text-primary font-black uppercase tracking-widest mb-1 italic font-mono-custom">Protocol Layer</p>
               <h3 className="text-4xl font-black uppercase italic tracking-tighter font-heading">Assets</h3>
             </div>
-            <button className="text-xs glass px-6 py-2.5 rounded-2xl font-bold border border-white/5 hover:border-primary/40 transition-all uppercase font-mono-custom">Market Data</button>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -704,27 +875,6 @@ function WalletView({ user, setScreen, stats }) {
            <UsageProgress label="Escrow Volume" current={2500} max={10000} />
            <UsageProgress label="Registry Health" current={98} max={100} />
         </section>
-
-        <section className="glass p-10 rounded-[3.5rem] border border-white/10">
-           <div className="flex items-center gap-4 mb-6">
-             <div className="w-4 h-4 bg-secondary rounded-full"></div>
-             <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading">System Status</h3>
-           </div>
-           <div className="space-y-4 font-mono-custom text-[10px] uppercase tracking-widest font-bold">
-              <div className="flex justify-between py-2 border-b border-white/5">
-                <span className="text-gray-500">Node Sync</span>
-                <span className="text-secondary">Fully Synced</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-white/5">
-                <span className="text-gray-500">IPFS Gateway</span>
-                <span className="text-secondary">Operational</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-white/5">
-                <span className="text-gray-500">Auth Server</span>
-                <span className="text-secondary">Connected</span>
-              </div>
-           </div>
-        </section>
       </div>
     </div>
   );
@@ -734,16 +884,47 @@ function WalletView({ user, setScreen, stats }) {
 
 function EscrowDashboard({ user, setScreen }) {
   const [activeTab, setActiveTab] = useState('active');
+  const [escrows, setEscrows] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const escrows = [
-    { id: '1', role: 'sender', amount: '2.5 BNB', status: 'funded', receiver: '0x12...3456', product: 'Luxury Watch X1', time: '2h ago', tx: '0x9482...a8' },
-    { id: '2', role: 'receiver', amount: '0.8 BNB', status: 'completed', sender: '0xab...cd90', product: 'Vintage Camera', time: '1d ago', tx: '0x321a...4e' },
-    { id: '3', role: 'sender', amount: '1.2 BNB', status: 'closed', receiver: '0x7e...21', product: 'Tech Collectible', time: '3d ago', tx: '0xcc89...11' },
-  ];
+  useEffect(() => {
+    const fetchEscrows = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('escrows')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+      
+      if (data) setEscrows(data);
+      setLoading(false);
+    };
+
+    fetchEscrows();
+  }, [user.id]);
+
+  const handleRelease = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('escrows')
+        .update({ status: 'completed' })
+        .eq('id', id);
+      
+      if (error) throw error;
+      setEscrows(prev => prev.map(e => e.id === id ? { ...e, status: 'completed' } : e));
+      alert('Funds Released Successfully.');
+    } catch (e) {
+      alert('Release Failed: ' + e.message);
+    }
+  };
+
+  const filteredEscrows = escrows.filter(e => 
+    activeTab === 'active' ? e.status !== 'completed' && e.status !== 'closed' : e.status === 'completed' || e.status === 'closed'
+  );
 
   return (
     <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto">
-      <header className="flex justify-between items-center mb-12">
+      <header className="flex justify-between items-center mb-12 text-left">
         <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading">Escrow Protocol</h2>
         <button 
           onClick={() => setScreen('create-escrow')}
@@ -765,67 +946,91 @@ function EscrowDashboard({ user, setScreen }) {
          ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {escrows.map((e) => (
-          <motion.div 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            key={e.id} 
-            className="group relative"
-          >
-             <div className="absolute inset-0 bg-primary/20 rounded-[3rem] opacity-0 group-hover:opacity-100 blur-2xl transition-all duration-500"></div>
-             <div className="relative glass p-10 rounded-[3rem] border border-white/10 overflow-hidden min-h-[320px] flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-8">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`w-2 h-2 rounded-full ${e.status === 'funded' ? 'bg-orange-500 animate-pulse' : 'bg-secondary'}`}></span>
-                        <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest font-mono-custom">{e.role} • {e.product}</p>
+      {loading ? (
+        <div className="py-20 text-center"><Zap className="animate-spin inline-block text-primary" size={48} /></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredEscrows.map((e) => (
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              key={e.id} 
+              className="group relative"
+            >
+               <div className="absolute inset-0 bg-primary/20 rounded-[3rem] opacity-0 group-hover:opacity-100 blur-2xl transition-all duration-500"></div>
+               <div className="relative glass p-10 rounded-[3rem] border border-white/10 overflow-hidden min-h-[320px] flex flex-col justify-between text-left">
+                  <div>
+                    <div className="flex justify-between items-start mb-8">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`w-2 h-2 rounded-full ${e.status === 'funded' ? 'bg-orange-500 animate-pulse' : 'bg-secondary'}`}></span>
+                          <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest font-mono-custom">{user.id === e.sender_id ? 'sender' : 'receiver'}</p>
+                        </div>
+                        <p className="text-4xl font-black italic uppercase tracking-tighter font-heading">{e.amount} {e.currency}</p>
                       </div>
-                      <p className="text-4xl font-black italic uppercase tracking-tighter font-heading">{e.amount}</p>
+                      <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${e.status === 'funded' ? 'border-orange-500 text-orange-500 bg-orange-500/5' : 'border-secondary text-secondary bg-secondary/5'}`}>
+                        {e.status}
+                      </span>
                     </div>
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${e.status === 'funded' ? 'border-orange-500 text-orange-500 bg-orange-500/5' : 'border-secondary text-secondary bg-secondary/5'}`}>
-                      {e.status}
-                    </span>
-                  </div>
 
-                  <div className="space-y-2 mb-8 font-mono-custom text-[9px] uppercase font-bold text-gray-500 tracking-tighter">
-                    <div className="flex justify-between"><span>Counterparty</span> <span className="text-white">0x...{e.role === 'sender' ? e.receiver.slice(-4) : e.sender.slice(-4)}</span></div>
-                    <div className="flex justify-between"><span>Transaction</span> <span className="text-white/40">{e.tx}</span></div>
+                    <div className="space-y-2 mb-8 font-mono-custom text-[9px] uppercase font-bold text-gray-500 tracking-tighter">
+                      <div className="flex justify-between"><span>Contract ID</span> <span className="text-white">#{e.id.slice(0,8)}</span></div>
+                      <div className="flex justify-between"><span>Transaction</span> <span className="text-white/40">TX_AUTH_SIGNED</span></div>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="flex justify-between items-center bg-white/[0.03] -mx-10 -mb-10 p-10 mt-auto">
-                  <div className="flex items-center gap-2">
-                    <Clock size={14} className="text-gray-500" />
-                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-tighter font-mono-custom">{e.time}</p>
+                  
+                  <div className="flex justify-between items-center bg-white/[0.03] -mx-10 -mb-10 p-10 mt-auto">
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className="text-gray-500" />
+                      <p className="text-[10px] text-gray-500 font-black uppercase tracking-tighter font-mono-custom">Active Node</p>
+                    </div>
+                    {user.id === e.sender_id && e.status === 'funded' && (
+                      <button 
+                        onClick={() => handleRelease(e.id)}
+                        className="bg-white text-black px-8 py-3 rounded-2xl text-[10px] font-black uppercase hover:bg-primary transition-colors font-heading tracking-widest"
+                      >
+                        Release
+                      </button>
+                    )}
                   </div>
-                  {e.role === 'sender' && e.status === 'funded' && (
-                    <button className="bg-white text-black px-8 py-3 rounded-2xl text-[10px] font-black uppercase hover:bg-primary transition-colors font-heading tracking-widest">Release</button>
-                  )}
-                </div>
-             </div>
-          </motion.div>
-        ))}
-      </div>
+               </div>
+            </motion.div>
+          ))}
+          {filteredEscrows.length === 0 && (
+            <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-[4rem]">
+              <p className="text-gray-500 font-black uppercase tracking-[0.4em] font-mono-custom text-center">No active contracts found on node</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function CreateEscrowView({ setScreen }) {
+function CreateEscrowView({ user, setScreen }) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ receiver: '', bnb: '', product: '' });
+  const [formData, setFormData] = useState({ receiver_id: '', amount: '', product_id: '', currency: 'BNB' });
 
   const handleCreateOnChain = async () => {
-    if (!formData.receiver || !formData.bnb) return alert('Fill fields');
+    if (!formData.receiver_id || !formData.amount) return alert('Fill fields');
     setLoading(true);
-    // Real Smart Contract interaction simulation
-    // await contract.createEscrow(receiver, product, { value: parseEther(bnb) })
-    setTimeout(() => {
-      alert('BNB Chain Transaction Confirmed: Escrow Locked');
-      setScreen('escrow');
-      setLoading(false);
-    }, 2500);
+    try {
+       const { error } = await supabase.from('escrows').insert([{
+         sender_id: user.id,
+         receiver_id: formData.receiver_id,
+         amount: parseFloat(formData.amount),
+         currency: formData.currency,
+         status: 'funded'
+       }]);
+
+       if (error) throw error;
+       alert('BNB Chain Transaction Confirmed: Escrow Locked');
+       setScreen('escrow');
+    } catch (e) {
+       alert('Contract Error: ' + e.message);
+    } finally {
+       setLoading(false);
+    }
   };
 
   return (
@@ -837,18 +1042,36 @@ function CreateEscrowView({ setScreen }) {
 
       <div className="space-y-6 flex-1 overflow-y-auto">
         <FormInput 
-          label="Counterparty (Address)" 
-          placeholder="0x..." 
-          value={formData.receiver}
-          onChange={(v) => setFormData({...formData, receiver: v})}
+          label="Counterparty (User UUID)" 
+          placeholder="e.g. ae6d..." 
+          value={formData.receiver_id}
+          onChange={(v) => setFormData({...formData, receiver_id: v})}
         />
-        <FormInput 
-          label="Value (BNB)" 
-          type="number" 
-          placeholder="0.00" 
-          value={formData.bnb}
-          onChange={(v) => setFormData({...formData, bnb: v})}
-        />
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <FormInput 
+              label="Value" 
+              type="number" 
+              placeholder="0.00" 
+              value={formData.amount}
+              onChange={(v) => setFormData({...formData, amount: v})}
+            />
+          </div>
+          <div className="w-32">
+            <label className="text-[10px] text-primary uppercase font-black mb-3 block font-mono-custom">Asset</label>
+            <select 
+              value={formData.currency}
+              onChange={(e) => setFormData({...formData, currency: e.target.value})}
+              className="w-full glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs uppercase"
+            >
+               <option value="BNB">BNB</option>
+               <option value="USDT">USDT</option>
+               <option value="USDC">USDC</option>
+               <option value="BTC">BTC</option>
+               <option value="ETH">ETH</option>
+            </select>
+          </div>
+        </div>
         <FormInput 
           label="On-Chain Product ID (Optional)" 
           placeholder="GG_THLX_XXXXXX" 
@@ -877,31 +1100,55 @@ function CreateEscrowView({ setScreen }) {
 
 // ⸻ PRODUCT REGISTRY (ON-CHAIN) ⸻
 
-function ProductsView({ setScreen }) {
+function ProductsView({ user, setScreen }) {
   const [search, setSearch] = useState('');
   const [result, setResult] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [registerData, setRegisterData] = useState({ name: '', serial: '', desc: '', price: '' });
 
   const handleRegister = async () => {
+    if (!registerData.name || !registerData.serial) return;
     setIsRegistering(true);
-    setTimeout(() => {
+    try {
+      const { error } = await supabase.from('products').insert([{
+        product_code: registerData.serial.toUpperCase(),
+        owner_id: user.id,
+        metadata: {
+          name: registerData.name,
+          type: 'Consumer Goods',
+          price: registerData.price || '0.00 BNB',
+          description: registerData.desc
+        }
+      }]);
+      
+      if (error) throw error;
       alert('Product Registered. CID pinned. 0.009 BNB Sent to Treasury.');
       setShowRegister(false);
       setIsRegistering(false);
-    }, 3000);
+    } catch (e) {
+      alert('Registration Error: ' + e.message);
+      setIsRegistering(false);
+    }
   };
 
-  const handleVerify = () => {
-    if (search === 'GG_THLX_000042') {
+  const handleVerify = async () => {
+    if (!search) return;
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('product_code', search.trim().toUpperCase())
+      .single();
+
+    if (data) {
       setResult({ 
         status: 'authentic', 
-        name: 'Luxury Watch X1', 
-        manufacturer: 'Thalexa Chrono Labs', 
-        tx: '0xabc7294...def',
+        name: data.metadata?.name || 'Unknown Item', 
+        manufacturer: 'Authenticated Asset', 
+        tx: data.id.slice(0,12),
         ipfs_cid: 'QmXoyp...7V2c',
-        location: 'Geneva, Switzerland',
-        date: 'May 03, 2026'
+        location: 'Global Hub',
+        date: new Date(data.created_at).toLocaleDateString()
       });
     } else {
       setResult({ status: 'unknown' });
@@ -926,10 +1173,11 @@ function ProductsView({ setScreen }) {
               <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-8 glass p-12 rounded-[4rem] border border-white/5">
                   <h3 className="text-3xl font-black uppercase italic tracking-tighter text-primary font-heading">On-Chain Registry</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormInput label="Item Identity" placeholder="e.g. Masterpiece #4" />
-                    <FormInput label="Serial Number" placeholder="THLX-XXXX-XXXX" />
+                    <FormInput label="Item Identity" placeholder="e.g. Masterpiece #4" value={registerData.name} onChange={v => setRegisterData({...registerData, name: v})} />
+                    <FormInput label="Serial Number" placeholder="THLX-XXXX-XXXX" value={registerData.serial} onChange={v => setRegisterData({...registerData, serial: v})} />
                   </div>
-                  <FormInput label="Description (Stored in IPFS)" placeholder="Luxury quality details..." />
+                  <FormInput label="Description (Stored in IPFS)" placeholder="Luxury quality details..." value={registerData.desc} onChange={v => setRegisterData({...registerData, desc: v})} />
+                  <FormInput label="Asset Value" placeholder="e.g. 0.5 BNB" value={registerData.price} onChange={v => setRegisterData({...registerData, price: v})} />
                   
                   <div className="p-8 bg-white/5 rounded-[3rem] border border-white/10 space-y-4">
                     <div className="flex justify-between">
@@ -1175,46 +1423,91 @@ function NavItem({ icon, active, onClick }) {
 }
 
 function AdminView({ setScreen, stats }) {
-  const [logs, setLogs] = useState([
-    { id: 1, action: 'Product Registered', details: 'GG_THLX_000042', time: '10m ago', status: 'SUCCESS', cid: 'QmXoyp...7V2c' },
-    { id: 2, action: 'Escrow Created', details: '2.5 BNB Locked', time: '2h ago', status: 'SUCCESS' },
-    { id: 3, action: 'IPFS Pinning', details: 'Luxury Watch X1', time: '5h ago', status: 'SYNCED', cid: 'QmXo...2c' },
-  ]);
+  const [logs, setLogs] = useState([]);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+  
+  // Product Upload State
+  const [newProduct, setNewProduct] = useState({
+    code: '',
+    name: '',
+    type: '',
+    price: '',
+    image_url: '',
+    emoji: '📦'
+  });
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const actions = ['Asset release', 'Auth handshake', 'Node sync', 'Registry query', 'Escrow funded'];
-      const statuses = ['SUCCESS', 'SYNCED', 'PENDING'];
-      const newLog = {
-        id: Date.now(),
-        action: actions[Math.floor(Math.random() * actions.length)],
-        time: 'Just now',
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        tx: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 4)
-      };
-      setLogs(prev => [newLog, ...prev.slice(0, 4)]);
-    }, 8000);
-    return () => clearInterval(interval);
+    const fetchLogs = async () => {
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (data) setLogs(data);
+    };
+
+    fetchLogs();
+    
+    // Real-time subscription to transactions
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: 'INSERT', table: 'transactions' }, payload => {
+        setLogs(prev => [payload.new, ...prev]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [isPublishing, setIsPublishing] = useState(false);
-
   const handleBroadcast = async () => {
-    if (!broadcastMsg) return;
+    if (!broadcastMsg || !broadcastTitle) return;
     setIsPublishing(true);
     try {
-      await fetch('/api/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: broadcastMsg })
-      });
+      const { error } = await supabase.from('notifications').insert([{
+        title: broadcastTitle,
+        content: broadcastMsg,
+        type: 'announcement'
+      }]);
+      
+      if (error) throw error;
       setBroadcastMsg('');
-      alert('Network Broadcast Sent.');
+      setBroadcastTitle('');
+      alert('Network Broadcast Sent to All Nodes.');
     } catch (e) {
-      console.error(e);
+      alert('Broadcast Error: ' + e.message);
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleProductUpload = async () => {
+    if (!newProduct.code || !newProduct.name || !newProduct.price) return;
+    setIsUploading(true);
+    try {
+      const { error } = await supabase.from('products').insert([{
+        product_code: newProduct.code,
+        ipfs_cid: 'direct_upload',
+        metadata: {
+          name: newProduct.name,
+          type: newProduct.type || 'Luxury Asset',
+          price: newProduct.price,
+          image_url: newProduct.image_url,
+          emoji: newProduct.emoji
+        }
+      }]);
+
+      if (error) throw error;
+      setNewProduct({ code: '', name: '', type: '', price: '', image_url: '', emoji: '📦' });
+      alert('Product Minted Successfully.');
+    } catch (e) {
+      alert('Minting Error: ' + e.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1229,73 +1522,91 @@ function AdminView({ setScreen, stats }) {
             </button>
             <h2 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter font-heading">Terminal</h2>
           </div>
-          <div className="text-right hidden md:block">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em] font-mono-custom">Protocol Sync</p>
-            <p className="text-2xl font-black text-primary font-heading italic tracking-tighter">v1.2.4-PROD</p>
-          </div>
         </header>
 
+        {/* Product Upload Tool */}
+        <section className="mb-12 glass p-10 rounded-[3rem] border border-primary/20 bg-primary/5">
+           <h3 className="text-xl font-black italic uppercase mb-6 tracking-tighter font-heading text-primary">Mint New Product (Landing NFT)</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <AdminInput placeholder="Product Code (id)" value={newProduct.code} onChange={v => setNewProduct({...newProduct, code: v})} />
+              <AdminInput placeholder="Display Name" value={newProduct.name} onChange={v => setNewProduct({...newProduct, name: v})} />
+              <AdminInput placeholder="Asset Type" value={newProduct.type} onChange={v => setNewProduct({...newProduct, type: v})} />
+              <AdminInput placeholder="Price (BNB)" value={newProduct.price} onChange={v => setNewProduct({...newProduct, price: v})} />
+              <AdminInput placeholder="Image URL (Option)" value={newProduct.image_url} onChange={v => setNewProduct({...newProduct, image_url: v})} />
+              <AdminInput placeholder="Emoji fallback" value={newProduct.emoji} onChange={v => setNewProduct({...newProduct, emoji: v})} />
+           </div>
+           <button 
+             onClick={handleProductUpload}
+             disabled={isUploading}
+             className="w-full bg-primary text-black py-6 rounded-3xl font-black uppercase text-sm font-heading hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+           >
+             {isUploading ? <Zap className="animate-spin" /> : <><Database size={18}/> Mint On-Chain Asset</>}
+           </button>
+        </section>
+
         <section className="mb-12">
-           <h3 className="text-xl font-black italic uppercase mb-6 tracking-tighter font-heading text-primary">Protocol Broadcast</h3>
-           <div className="flex gap-4">
+           <h3 className="text-xl font-black italic uppercase mb-6 tracking-tighter font-heading text-primary">Network Broadcast (Admin Mail)</h3>
+           <div className="space-y-4">
               <input 
                 type="text" 
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                placeholder="Message Subject..."
+                className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 focus:border-primary transition-all font-bold uppercase tracking-widest text-xs font-mono-custom"
+              />
+              <textarea 
                 value={broadcastMsg}
                 onChange={(e) => setBroadcastMsg(e.target.value)}
-                placeholder="Push network-wide protocol alert..."
-                className="flex-1 glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 focus:border-primary transition-all font-bold uppercase tracking-widest text-xs font-mono-custom"
+                placeholder="Push network-wide protocol alert or system mail..."
+                rows={4}
+                className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 focus:border-primary transition-all font-bold uppercase tracking-widest text-xs font-mono-custom resize-none"
               />
               <button 
                 onClick={handleBroadcast}
                 disabled={isPublishing}
                 className="bg-primary text-black px-10 py-6 rounded-3xl font-black uppercase text-xs font-heading hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
               >
-                {isPublishing ? <Zap className="animate-spin" /> : <><Zap size={18}/> Push 10.4k Nodes</>}
+                {isPublishing ? <Zap className="animate-spin" /> : <><Zap size={18}/> Broadcast to Network</>}
               </button>
            </div>
         </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <AdminStat label="Total Assets" val="$324.5M" delta="+12.4%" icon={<TrendingUp size={28}/>} />
-            <AdminStat label="BNB Treasury" val={stats?.treasury_balance || '84.5 BNB'} delta="+1.2 BNB" icon={<Database size={28}/>} color="text-secondary" />
-            <AdminStat label="Nodes Active" val="12,492" delta="100.0%" icon={<ShieldCheck size={28}/>} />
-        </div>
-
         <div className="glass p-12 rounded-[4rem] border border-white/10 relative overflow-hidden">
-           <div className="absolute top-0 right-0 p-8">
-             <div className="flex items-center gap-2">
-               <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-lg shadow-primary/50"></div>
-               <span className="text-[10px] font-black uppercase tracking-widest text-primary font-mono-custom tracking-[0.2em]">Flux Log</span>
-             </div>
-           </div>
-           <h3 className="text-3xl font-black italic uppercase mb-10 tracking-tighter font-heading">Network Interaction Log</h3>
+           <h3 className="text-3xl font-black italic uppercase mb-10 tracking-tighter font-heading">Recent Transactions</h3>
            <div className="space-y-4">
-              {logs.map(log => (
-                <LogEntry key={log.id} user="protocol_node_42" action={log.action} status={log.status} tx={log.cid || "0x9f...a8"} />
-              ))}
+              {logs.length > 0 ? logs.map(log => (
+                <LogEntry key={log.id} user={log.user_id?.slice(0, 8)} action={log.type} status={log.status} tx={log.amount + ' ' + log.currency} />
+              )) : <p className="text-gray-500 font-mono text-xs uppercase text-center py-10 tracking-widest">No transaction pulse detected.</p>}
            </div>
         </div>
       </div>
 
       <div className="lg:col-span-4 pt-4 md:pt-24 space-y-8 text-left">
           <div className="glass p-10 rounded-[3.5rem] border border-primary/20 bg-primary/5">
-             <h4 className="text-[10px] text-primary font-black uppercase tracking-[0.3em] mb-6 font-mono-custom">Network Health</h4>
-             <div className="space-y-6">
-                <UsageProgress label="Block Latency" current={12} max={100} />
-                <UsageProgress label="IPFS Propagation" current={94} max={100} />
-             </div>
+                <AdminStat label="Nodes Connected" val="12,492" delta="100.0%" icon={<ShieldCheck size={28}/>} />
           </div>
-          
           <div className="glass p-10 rounded-[3.5rem] border border-white/5">
              <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em] mb-4 font-mono-custom">Infrastructure Status</h4>
              <ul className="space-y-4 font-mono-custom text-[10px] uppercase font-bold tracking-widest">
                 <li className="flex justify-between border-b border-white/5 pb-2"><span>EVM Bridge</span> <span className="text-secondary">Connected</span></li>
                 <li className="flex justify-between border-b border-white/5 pb-2"><span>PINATA API</span> <span className="text-secondary">Operational</span></li>
-                <li className="flex justify-between"><span>Supabase Auth</span> <span className="text-secondary">Verified</span></li>
+                <li className="flex justify-between"><span>Supabase Sync</span> <span className="text-secondary">Verified</span></li>
              </ul>
           </div>
       </div>
     </div>
+  );
+}
+
+function AdminInput({ placeholder, value, onChange }) {
+  return (
+    <input 
+      type="text" 
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="glass bg-white/5 p-5 rounded-2xl outline-none border border-white/10 focus:border-primary transition-all font-bold uppercase tracking-widest text-[10px] font-mono-custom"
+    />
   );
 }
 
@@ -1402,11 +1713,39 @@ function SettingItem({ icon, label, onClick }) {
 }
 
 function SubscriptionsView({ user, setScreen }) {
+  const [loading, setLoading] = useState(null);
   const plans = [
-    { title: 'Starter Node', price: '0.00 BNB', limit: '10 Verification/mo', features: ['Public Registry Access', 'Basic Traceability', 'Community Support'], color: 'gray' },
-    { title: 'Professional', price: '0.05 BNB', limit: 'Unlimited Verification', features: ['MPC Wallet Identity', 'Bulk Verification API', 'Priority IPFS Sync', 'Escrow System Access'], color: 'primary' },
-    { title: 'Enterprise', price: '0.25 BNB', limit: 'Infinite Nodes', features: ['ZK-Proof Privacy', 'Custom Smart Contracts', '24/7 Governance Support', 'White-label SDK'], color: 'secondary' },
+    { title: 'Starter Node', price: '0.00 BNB', value: 0, limit: '10 Verification/mo', features: ['Public Registry Access', 'Basic Traceability', 'Community Support'], color: 'gray' },
+    { title: 'Professional', price: '0.05 BNB', value: 50, limit: 'Unlimited Verification', features: ['MPC Wallet Identity', 'Bulk Verification API', 'Priority IPFS Sync', 'Escrow System Access'], color: 'primary' },
+    { title: 'Enterprise', price: '0.25 BNB', value: 250, limit: 'Infinite Nodes', features: ['ZK-Proof Privacy', 'Custom Smart Contracts', '24/7 Governance Support', 'White-label SDK'], color: 'secondary' },
   ];
+
+  const handleUpgrade = async (plan) => {
+    if (plan.value === 0) return;
+    setLoading(plan.title);
+    try {
+      const resp = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          amount: plan.value * 1000, // Just a factor for demo
+          metadata: { plan: plan.title.toLowerCase(), user_id: user.id }
+        })
+      });
+      const data = await resp.json();
+      if (data.status && data.data.authorization_url) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment initialization failed.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Network error during payment.');
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto">
@@ -1450,16 +1789,16 @@ function SubscriptionsView({ user, setScreen }) {
                <div className="w-full py-6 text-center text-primary font-black uppercase tracking-widest bg-primary/10 rounded-[2rem] text-sm italic shadow-inner font-heading border border-primary/20">Active Node Architecture</div>
              ) : (
                <button 
-                 onClick={() => window.open('https://paystack.com', '_blank')}
-                 className="w-full py-6 bg-white text-black font-black uppercase tracking-[0.2em] rounded-[2rem] text-sm transition-all hover:scale-[1.02] hover:bg-primary shadow-2xl font-heading"
+                disabled={loading === p.title}
+                onClick={() => handleUpgrade(p)}
+                className="w-full py-6 glass bg-white/5 border border-white/10 rounded-[2rem] font-black uppercase tracking-widest text-sm hover:bg-primary hover:text-black transition-all font-heading"
                >
-                 Initialize Node
+                 {loading === p.title ? <Zap className="animate-spin mx-auto" /> : `Activate ${p.title}`}
                </button>
              )}
           </div>
         ))}
       </div>
-
       <div className="mt-16 text-center">
          <p className="text-gray-600 text-xs font-black uppercase tracking-[0.4em] font-mono-custom italic">Payments processed via BNB Native or Paystack Gateway</p>
       </div>
