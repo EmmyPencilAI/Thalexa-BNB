@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'CORPTADEMO';
+  src: local('CORPTADEMO-REGULAR'), url('/fonts/CORPTADEMO-REGULAR.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'NEVERA';
+  src: local('NEVERA'), url('/fonts/NEVERA.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'MaintakerDemo';
+  src: local('MaintakerDemo'), url('/fonts/MaintakerDemo.ttf') format('truetype');
+}
+
+:root {
+  --font-corpta: 'CORPTADEMO', 'Space Grotesk', sans-serif;
+  --font-nevera: 'NEVERA', 'Outfit', sans-serif;
+  --font-maintaker: 'MaintakerDemo', 'JetBrains Mono', monospace;
+}
+
+body {
+  @apply bg-black text-white antialiased;
+  font-family: var(--font-nevera);
+}
+
+h1, h2, h3, .font-heading {
+  font-family: var(--font-corpta);
+}
+
+.font-mono-custom {
+  font-family: var(--font-maintaker);
+}
+
+.glass {
+  @apply bg-white/[0.03] backdrop-blur-3xl;
+}
+
+.bg-primary {
+  background-color: #FF6B00;
+}
+
+.text-primary {
+  color: #FF6B00;
+}
+
+.border-primary {
+  border-color: #FF6B00;
+}
+
+.bg-secondary {
+  background-color: #00FF85;
+}
+
+.text-secondary {
+  color: #00FF85;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 0, 0.5);
+}
