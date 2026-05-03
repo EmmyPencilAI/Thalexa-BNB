@@ -1929,9 +1929,9 @@ function Onboarding({ onLogin, loading }) {
   const [data, setData] = useState({ email: 'emmanuelobed877@gmail.com', username: '', country: 'Nigeria', accepted: false });
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-white overflow-hidden text-dark font-sans">
-       <div className="absolute -top-24 -left-24 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10 animate-pulse"></div>
-       <div className="absolute -bottom-24 -right-24 w-[600px] h-[600px] bg-secondary/5 rounded-full blur-[120px] -z-10"></div>
+    <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-[#050505] overflow-hidden text-white font-sans">
+       <div className="absolute -top-24 -left-24 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10 animate-pulse"></div>
+       <div className="absolute -bottom-24 -right-24 w-[600px] h-[600px] bg-secondary/10 rounded-full blur-[120px] -z-10"></div>
        
        <motion.div 
          initial={{ y: 20, opacity: 0 }}
@@ -1939,12 +1939,12 @@ function Onboarding({ onLogin, loading }) {
          className="w-full max-w-xl text-center"
        >
           <div className="flex flex-col items-center mb-16">
-             <div className="w-40 h-40 bg-white shadow-2xl rounded-full flex items-center justify-center mb-8 relative group">
-                <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-0 group-hover:scale-125 transition-transform duration-700"></div>
+             <div className="w-40 h-40 bg-white/5 border border-white/10 shadow-2xl rounded-full flex items-center justify-center mb-8 relative group">
+                <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full scale-0 group-hover:scale-125 transition-transform duration-700"></div>
                 <Zap size={80} className="text-primary fill-primary relative animate-bounce" />
              </div>
-             <h1 className="text-5xl font-black tracking-tighter mb-4 text-dark font-heading">Welcome to Thalexa</h1>
-             <p className="text-gray-500 text-xl font-medium font-nevera">The world's leading protocol for physical asset tokenization and verification.</p>
+             <h1 className="text-5xl font-black tracking-tighter mb-4 text-white font-heading">Welcome to Thalexa</h1>
+             <p className="text-gray-400 text-xl font-medium font-nevera">The world's leading protocol for physical asset tokenization and verification.</p>
           </div>
       
           <AnimatePresence mode="wait">
@@ -1966,17 +1966,17 @@ function Onboarding({ onLogin, loading }) {
                       <div className="grid grid-cols-2 gap-4">
                          <button 
                            onClick={() => onLogin({ email: 'web3auth_user@thalexa.io', username: 'web3_node' })}
-                           className="flex items-center justify-center gap-3 p-4 border-2 border-gray-100 rounded-2xl hover:border-primary transition-colors hover:bg-primary/5"
+                           className="flex items-center justify-center gap-3 p-4 border-2 border-white/5 rounded-2xl hover:border-primary transition-colors hover:bg-primary/10"
                          >
-                            <ShieldCheck size={20} className="text-blue-500" />
-                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom">Web3Auth</span>
+                            <ShieldCheck size={20} className="text-blue-400" />
+                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom text-white">Web3Auth</span>
                          </button>
                          <button 
                            onClick={() => onLogin({ email: 'metamask_user@thalexa.io', username: 'mm_node' })}
-                           className="flex items-center justify-center gap-3 p-4 border-2 border-gray-100 rounded-2xl hover:border-primary transition-colors hover:bg-primary/5"
+                           className="flex items-center justify-center gap-3 p-4 border-2 border-white/5 rounded-2xl hover:border-primary transition-colors hover:bg-primary/10"
                          >
-                            <Zap size={20} className="text-orange-500" />
-                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom">MetaMask</span>
+                            <Zap size={20} className="text-orange-400" />
+                            <span className="font-black text-[10px] uppercase tracking-widest font-mono-custom text-white">MetaMask</span>
                          </button>
                       </div>
                    </div>
@@ -1985,18 +1985,18 @@ function Onboarding({ onLogin, loading }) {
 
              {step === 1 && (
                 <motion.div key="details" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-                   <div className="bg-white p-12 rounded-[3rem] border border-gray-100 shadow-2xl text-left">
-                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-dark text-center">Node <span className="text-primary">Configuration</span></h2>
+                   <div className="bg-[#0a0a0a] p-12 rounded-[3rem] border border-white/10 shadow-2xl text-left">
+                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-white text-center">Node <span className="text-primary">Configuration</span></h2>
                       <div className="space-y-6 mb-12">
-                         <FormInput label="Operator Handle" placeholder="e.g. Satoshi_42" value={data.username} onChange={v => setData({...data, username: v})} dark={false} />
+                         <FormInput label="Operator Handle" placeholder="e.g. Satoshi_42" value={data.username} onChange={v => setData({...data, username: v})} dark={true} />
                          <div className="flex flex-col gap-3">
                             <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Region Node</label>
                             <select 
                               value={data.country}
                               onChange={(e) => setData({...data, country: e.target.value})}
-                              className="w-full bg-gray-50 p-6 rounded-3xl outline-none border border-gray-200 font-black text-xs uppercase text-dark focus:border-primary transition-all"
+                              className="w-full bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white focus:border-primary transition-all selection:bg-primary selection:text-black"
                             >
-                               {['Global', 'Nigeria', 'USA', 'UK', 'Germany', 'Japan', 'China'].map(c => <option key={c} value={c}>{c}</option>)}
+                               {['Global', 'Nigeria', 'USA', 'UK', 'Germany', 'Japan', 'China'].map(c => <option key={c} value={c} className="bg-black">{c}</option>)}
                             </select>
                          </div>
                       </div>
@@ -2014,21 +2014,21 @@ function Onboarding({ onLogin, loading }) {
 
              {step === 2 && (
                 <motion.div key="finalize" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-                   <div className="bg-white p-12 rounded-[3rem] border border-gray-100 shadow-2xl text-left">
-                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-dark text-center">Security <span className="text-secondary">Bind</span></h2>
+                   <div className="bg-[#0a0a0a] p-12 rounded-[3rem] border border-white/10 shadow-2xl text-left">
+                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-white text-center">Security <span className="text-secondary">Bind</span></h2>
                       <div className="space-y-6 mb-12">
-                         <FormInput label="Node Communication (Email)" placeholder="node@protocol.io" value={data.email} onChange={v => setData({...data, email: v})} dark={false} />
-                         <div className="flex items-center gap-4 p-6 bg-gray-50 border border-gray-200 rounded-3xl cursor-pointer hover:border-primary transition-all" onClick={() => setData({...data, accepted: !data.accepted})}>
+                         <FormInput label="Node Communication (Email)" placeholder="node@protocol.io" value={data.email} onChange={v => setData({...data, email: v})} dark={true} />
+                         <div className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-3xl cursor-pointer hover:border-primary transition-all" onClick={() => setData({...data, accepted: !data.accepted})}>
                             <div className={`w-6 h-6 rounded-lg border-2 border-primary flex items-center justify-center transition-all ${data.accepted ? 'bg-primary' : ''}`}>
-                               {data.accepted && <CheckCircle2 size={14} className="text-white" />}
+                               {data.accepted && <CheckCircle2 size={14} className="text-black" />}
                             </div>
-                            <p className="text-[10px] font-black uppercase text-gray-500 font-mono-custom flex-1">I accept the immutable protocol terms and covenant guidelines.</p>
+                            <p className="text-[10px] font-black uppercase text-gray-400 font-mono-custom flex-1">I accept the immutable protocol terms and covenant guidelines.</p>
                          </div>
                       </div>
                       <div className="flex gap-4">
                          <button 
                            onClick={() => setStep(1)} 
-                           className="flex-1 p-8 border-2 border-gray-100 rounded-3xl font-black uppercase text-xs text-dark hover:bg-gray-50 transition-all font-mono-custom"
+                           className="flex-1 p-8 border border-white/10 rounded-3xl font-black uppercase text-xs text-white hover:bg-white/5 transition-all font-mono-custom"
                          >
                             Back
                          </button>
