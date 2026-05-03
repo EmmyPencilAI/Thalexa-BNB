@@ -88,32 +88,40 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = async (loginData = {}) => {
     setLoading(true);
     try {
-       // In a real app, you'd use Supabase Auth here
-       // For this demo, we simulate a login and fetch the user profile from our 'users' table
+       // persist login
+       const email = loginData.email || 'emmanuelobed877@gmail.com';
        const { data, error } = await supabase
          .from('users')
          .select('*')
-         .eq('email', 'emmanuelobed877@gmail.com')
+         .eq('email', email)
          .single();
        
        if (data) {
          setUser(data);
+         localStorage.setItem('thalexa_user_email', email);
        } else {
-          // Auto-create profile if not exists (for demo convenience)
+          // Auto-create profile if not exists
+          const wallet = '0x' + Math.random().toString(16).slice(2, 42);
           const newUser = {
             id: 'ae6d' + Math.random().toString(16).slice(2, 10),
-            email: 'emmanuelobed877@gmail.com',
-            wallet_address: '0x' + Math.random().toString(16).slice(2, 42),
+            email: email,
+            username: loginData.username || 'user_' + Math.random().toString(36).slice(2, 7),
+            country: loginData.country || 'Global',
+            wallet_address: wallet,
             role: 'admin',
-            plan: 'professional'
+            plan: 'professional',
+            is_verified: false
           };
-          await supabase.from('users').insert([newUser]);
-          setUser(newUser);
+          const { data: createdUser, error: insertError } = await supabase.from('users').insert([newUser]).select().single();
+          if (createdUser) {
+            setUser(createdUser);
+            localStorage.setItem('thalexa_user_email', email);
+          }
        }
-       setScreen('wallet');
+       setScreen('home');
     } catch (e) {
        console.error(e);
     } finally {
@@ -121,25 +129,71 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('thalexa_user_email');
+    if (savedEmail) {
+       handleLogin({ email: savedEmail });
+    }
+  }, []);
+
   const renderScreen = () => {
-    // Corrected navigation logic:
     if (!user) {
       if (screen === 'onboarding') return <Onboarding onLogin={handleLogin} loading={loading} />;
       return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
     }
 
-    switch (screen) {
-      case 'landing': return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} products={landingProducts} />;
-      case 'onboarding': return <Onboarding onLogin={handleLogin} loading={loading} />;
-      case 'wallet': return <WalletView user={user} setScreen={setScreen} stats={stats} />;
-      case 'escrow': return <EscrowDashboard user={user} setScreen={setScreen} />;
-      case 'create-escrow': return <CreateEscrowView user={user} setScreen={setScreen} />;
-      case 'products': return <ProductsView user={user} setScreen={setScreen} />;
-      case 'settings': return <SettingsView user={user} setScreen={setScreen} setUser={setUser} />;
-      case 'admin': return <AdminView setScreen={setScreen} stats={stats} />;
-      case 'subscriptions': return <SubscriptionsView user={user} setScreen={setScreen} />;
-      default: return <WalletView user={user} setScreen={setScreen} stats={stats} />;
-    }
+    return (
+      <div className="w-full flex flex-col items-center">
+        {/* Top Sticky Header */}
+        <header className="sticky top-0 left-0 right-0 z-[60] glass border-b border-white/5 p-4 md:p-6 flex justify-between items-center w-full max-w-7xl mx-auto backdrop-blur-3xl">
+          <div className="relative flex-1 max-w-md hidden md:block">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+            <input 
+              placeholder="Search Thalexa ID, Wallet or Tx..." 
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold outline-none focus:border-primary transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-4">
+             <div className="flex flex-col items-end mr-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-primary font-mono-custom">Protocol Status</p>
+                <p className="text-[10px] font-bold text-white uppercase italic">Active Node: {user.thalexa_id || 'Generating...'}</p>
+             </div>
+             <button onClick={() => setScreen('notifications')} className="p-3 glass border border-white/10 rounded-2xl relative">
+                <div className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
+                <History size={18} />
+             </button>
+             <button onClick={() => setScreen('settings')} className="p-3 glass border border-white/10 rounded-2xl">
+                <Settings size={18} />
+             </button>
+             {user.role === 'admin' && (
+               <button onClick={() => setScreen('admin')} className="p-3 glass border border-white/10 rounded-2xl text-primary">
+                  <Database size={18} />
+               </button>
+             )}
+          </div>
+        </header>
+
+        <main className="w-full pb-32">
+          {(() => {
+            switch (screen) {
+              case 'landing': return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} products={landingProducts} />;
+              case 'onboarding': return <Onboarding onLogin={handleLogin} loading={loading} />;
+              case 'home': return <HomeView user={user} setScreen={setScreen} stats={stats} />;
+              case 'wallet-assets': return <WalletAssetsView user={user} setScreen={setScreen} />;
+              case 'escrow': return <EscrowDashboard user={user} setScreen={setScreen} />;
+              case 'create-escrow': return <CreateEscrowView user={user} setScreen={setScreen} />;
+              case 'products': return <ProductsView user={user} setScreen={setScreen} />;
+              case 'pay': return <PayView user={user} setScreen={setScreen} />;
+              case 'settings': return <SettingsView user={user} setScreen={setScreen} setUser={setUser} />;
+              case 'admin': return <AdminView setScreen={setScreen} stats={stats} />;
+              case 'subscriptions': return <SubscriptionsView user={user} setScreen={setScreen} />;
+              case 'notifications': return <NotificationsView user={user} />;
+              default: return <HomeView user={user} setScreen={setScreen} stats={stats} />;
+            }
+          })()}
+        </main>
+      </div>
+    );
   };
 
   return (
@@ -186,14 +240,12 @@ function App() {
       </AnimatePresence>
 
       {user && screen !== 'landing' && (
-        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass border border-white/10 py-4 px-8 flex justify-between items-center z-50 rounded-[2.5rem] shadow-2xl backdrop-blur-2xl md:bottom-auto md:top-6 md:left-[85%] md:flex-col md:gap-8 md:w-20 md:py-8 md:px-0 md:rounded-3xl hover:border-primary/30 transition-colors">
-          <NavItem icon={<Wallet />} active={screen === 'wallet'} onClick={() => setScreen('wallet')} label="Wallet" />
+        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-lg glass border border-white/10 py-4 px-6 flex justify-between items-center z-50 rounded-[2.5rem] shadow-2xl backdrop-blur-2xl md:bottom-auto md:top-6 md:left-[85%] md:flex-col md:gap-8 md:w-20 md:py-8 md:px-0 md:rounded-3xl hover:border-primary/30 transition-colors">
+          <NavItem icon={<LayoutDashboard />} active={screen === 'home'} onClick={() => setScreen('home')} label="Home" />
           <NavItem icon={<ShieldCheck />} active={screen === 'escrow'} onClick={() => setScreen('escrow')} label="Escrow" />
-          <NavItem icon={<Zap />} active={screen === 'products'} onClick={() => setScreen('products')} label="Products" />
-          <NavItem icon={<Settings />} active={screen === 'settings'} onClick={() => setScreen('settings')} label="Settings" />
-          {user.role === 'admin' && (
-            <NavItem icon={<Database />} active={screen === 'admin'} onClick={() => setScreen('admin')} label="Admin" />
-          )}
+          <NavItem icon={<Zap />} active={screen === 'products'} onClick={() => setScreen('products')} label="Registry" />
+          <NavItem icon={<CreditCard />} active={screen === 'pay'} onClick={() => setScreen('pay')} label="Pay" />
+          <NavItem icon={<Wallet />} active={screen === 'wallet-assets'} onClick={() => setScreen('wallet-assets')} label="Wallet" />
         </nav>
       )}
     </div>
@@ -308,7 +360,18 @@ function LandingPage({ onStart, stats, products }) {
           </div>
 
           <div className="lg:col-span-6 relative mt-12 lg:mt-0">
-             <ProductGrid3D products={products} />
+             {stats?.landing_asset ? (
+               <motion.div 
+                 initial={{ scale: 0.8, opacity: 0 }}
+                 animate={{ scale: 1, opacity: 1 }}
+                 className="relative w-full aspect-square flex items-center justify-center p-12"
+               >
+                 <div className="absolute inset-0 bg-primary/20 blur-[150px] rounded-full animate-pulse"></div>
+                 <img src={stats.landing_asset} className="w-full h-full object-contain relative z-10" alt="Protocol Asset" />
+               </motion.div>
+             ) : (
+               <ProductGrid3D products={products} />
+             )}
           </div>
         </div>
 
@@ -680,15 +743,43 @@ function StatCard({ icon, label, val, color }) {
 }
 
 
-// ⸻ WALLET SYSTEM (REAL MONEY) ⸻
+// ⸻ HOME PROTOCOL (DASHBOARD) ⸻
 
-function WalletView({ user, setScreen, stats }) {
+function HomeView({ user, setScreen, stats }) {
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [sendData, setSendData] = useState({ to: '', amount: '', currency: 'BNB' });
   const [swapData, setSwapData] = useState({ from: 'BNB', to: 'USDT', amount: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscription, setSubscription] = useState(null);
+  
+  const EXCHANGE_RATES = { BNB: 621, ETH: 3120, BTC: 64500, USDT: 1, USDC: 1 };
+  const [balance, setBalance] = useState({ BNB: 0, USDT: 0, USDC: 0, ETH: 0, BTC: 0 });
+
+  useEffect(() => {
+    const fetchBalances = async () => {
+      const { data } = await supabase.from('transactions').select('*').eq('user_id', user.id);
+      if (data) {
+        const newBalance = { BNB: 0, USDT: 0, USDC: 0, ETH: 0, BTC: 0 };
+        data.forEach(tx => {
+           if (tx.type === 'receive' || tx.type === 'deposit') {
+             newBalance[tx.currency] += tx.amount;
+           } else if (tx.type === 'send' || tx.type === 'withdraw') {
+             newBalance[tx.currency] -= tx.amount;
+           }
+        });
+        setBalance(newBalance);
+      }
+    };
+    fetchBalances();
+    
+    // Subscribe to transactions for real-time updates
+    const sub = supabase.channel('tx_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` }, fetchBalances)
+      .subscribe();
+      
+    return () => supabase.removeChannel(sub);
+  }, [user.id]);
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -701,17 +792,14 @@ function WalletView({ user, setScreen, stats }) {
     };
     fetchSubscription();
 
-    // Real-time subscription updates
     const channel = supabase
-      .channel('subscription_updates')
+      .channel('sub_upd')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${user.id}` }, (payload) => {
         setSubscription(payload.new);
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [user.id]);
 
   const limits = {
@@ -719,8 +807,8 @@ function WalletView({ user, setScreen, stats }) {
     professional: { vol: 200000, reg: 300 },
     enterprise: { vol: 2000000, reg: 100000 }
   };
-
   const currentLimits = limits[user.plan] || limits.starter;
+  const totalUsd = Object.entries(balance).reduce((acc, [ticker, val]) => acc + (val * EXCHANGE_RATES[ticker]), 0);
 
   const handleSend = async () => {
     if (!sendData.to || !sendData.amount) return;
@@ -731,192 +819,329 @@ function WalletView({ user, setScreen, stats }) {
         amount: parseFloat(sendData.amount),
         currency: sendData.currency,
         type: 'send',
-        status: 'completed',
-        tx_hash: '0x' + Math.random().toString(16).slice(2, 42)
+        status: 'completed'
       }]);
       if (error) throw error;
-      alert(`Successfully sent ${sendData.amount} ${sendData.currency} to ${sendData.to}`);
+      alert(`Sent ${sendData.amount} ${sendData.currency} successfully`);
       setIsSendModalOpen(false);
-      setSendData({ to: '', amount: '', currency: 'BNB' });
     } catch (e) {
-      alert('Transaction Failed: ' + e.message);
+      alert('Error: ' + e.message);
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 text-left">
       <div className="lg:col-span-8">
         <header className="flex justify-between items-center mb-12">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-[1.5rem] bg-primary/20 flex items-center justify-center font-black text-primary italic border border-primary/20 shadow-xl text-2xl font-heading">
-              {user.email[0].toUpperCase()}
+            <div className="w-16 h-16 rounded-[2rem] bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center font-black text-black italic shadow-2xl text-2xl font-heading">
+               {(user.username || 'T')[0].toUpperCase()}
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black font-mono-custom">Verified Node</p>
-              <p className="text-sm font-mono-custom text-gray-400 opacity-60 tracking-tighter">{user.wallet}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black font-mono-custom">Validated Node</p>
+              <h2 className="text-xl font-black italic tracking-tighter uppercase font-heading">{user.username}</h2>
             </div>
           </div>
-          <div className="flex items-center gap-3 glass px-5 py-2 rounded-full border border-white/10">
-             <div className={`w-2 h-2 rounded-full bg-secondary animate-pulse`}></div>
-             <span className="text-xs font-black uppercase tracking-tighter font-mono-custom">BNB Mainnet</span>
+          <div className="hidden sm:flex items-center gap-3 glass px-5 py-2 rounded-full border border-white/10">
+             <div className="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+             <span className="text-[10px] font-black uppercase tracking-tighter font-mono-custom">BNB Node 01</span>
           </div>
         </header>
 
-        {/* Live Transaction Pulse */}
-        <section className="mb-12 relative overflow-hidden">
-           <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading text-primary">Live Transaction Pulse</h3>
-              <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-secondary animate-ping"></div>
-                 <span className="text-[9px] font-black uppercase tracking-widest text-secondary font-mono-custom">Network Relay Active</span>
-              </div>
-           </div>
-           <div className="glass p-6 rounded-3xl border border-white/5 overflow-hidden h-16 flex items-center relative">
-              <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-l from-black/50 to-transparent z-10 pointer-events-none"></div>
-              <motion.div 
-                animate={{ x: [-1000, 0] }}
-                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                className="flex gap-12 whitespace-nowrap"
-              >
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500 font-mono-custom">
-                    <span className="text-white">TX_{Math.random().toString(16).slice(2,8)}:</span> MINT_SUCCESS (0x...{Math.random().toString(16).slice(2,4)})
-                    <span className="w-1 h-1 bg-white/20 rounded-full"></span>
-                    <span className="text-white">NODE_{i+1}:</span> {Math.floor(Math.random() * 50) + 10}ms LATENCY
-                  </div>
-                ))}
-              </motion.div>
-           </div>
-        </section>
-
-        <div className="bg-gradient-to-br from-[#111] to-black p-12 rounded-[4rem] border border-white/10 shadow-2xl mb-12 relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-primary/10 rounded-full blur-[120px]"></div>
-          <p className="text-gray-500 text-[12px] font-black mb-4 uppercase tracking-[0.3em] font-mono-custom">Liquidity Status</p>
-          <h2 className="text-7xl font-black italic mb-12 relative z-10 tracking-tighter font-heading">{user.balance}</h2>
+        {/* Global Asset Card */}
+        <div className="bg-gradient-to-br from-[#0a0a0a] to-black p-12 rounded-[4rem] border border-white/10 shadow-3xl mb-12 relative overflow-hidden group min-h-[350px] flex flex-col justify-center text-left">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-[120px]"></div>
+          <p className="text-gray-500 text-[10px] font-black mb-4 uppercase tracking-[0.4em] font-mono-custom">Available Liquidity (Total USD)</p>
+          <div className="flex items-baseline gap-4 mb-12">
+             <h2 className="text-7xl md:text-8xl font-black italic relative z-10 tracking-tighter font-heading text-white">
+                ${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+             </h2>
+             <span className="text-secondary font-black font-mono-custom text-xs animate-pulse">LIVE</span>
+          </div>
           
-          <div className="flex gap-6 relative z-10">
-            <ActionButton onClick={() => setIsSendModalOpen(true)} icon={<ArrowUpRight />} label="Send Assets" />
-            <ActionButton onClick={() => setIsSwapModalOpen(true)} icon={<QrCode />} label="Swap Assets" />
+          <div className="flex flex-wrap gap-6 relative z-10">
+            <ActionButton onClick={() => setIsSendModalOpen(true)} icon={<ArrowUpRight />} label="Transfer" />
+            <ActionButton onClick={() => setIsSwapModalOpen(true)} icon={<Cpu />} label="Atomic Swap" variant="secondary" />
+            <ActionButton onClick={() => setScreen('pay')} icon={<CreditCard />} label="Cash Out" variant="glass" />
           </div>
         </div>
 
-        {/* Send Modal */}
-        <AnimatePresence>
-          {isSendModalOpen && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
-            >
-              <div className="glass p-12 rounded-[4rem] border border-white/10 w-full max-w-xl relative text-left">
-                <h3 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-8">Initiate Transfer</h3>
-                <div className="space-y-4 mb-8">
-                   <AdminInput placeholder="Recipient Wallet Address (0x...)" value={sendData.to} onChange={v => setSendData({...sendData, to: v})} />
-                   <div className="flex gap-4">
-                      <AdminInput placeholder="Amount" value={sendData.amount} onChange={v => setSendData({...sendData, amount: v})} />
-                      <select 
-                        value={sendData.currency}
-                        onChange={(e) => setSendData({...sendData, currency: e.target.value})}
-                        className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs uppercase"
-                      >
-                         <option value="BNB">BNB</option>
-                         <option value="USDT">USDT</option>
-                         <option value="USDC">USDC</option>
-                         <option value="BTC">BTC</option>
-                         <option value="ETH">ETH</option>
-                      </select>
-                   </div>
-                </div>
-                <div className="flex gap-4">
-                   <button onClick={() => setIsSendModalOpen(false)} className="flex-1 p-6 glass border border-white/10 rounded-3xl font-black uppercase text-xs">Cancel</button>
-                   <button onClick={handleSend} disabled={isProcessing} className="flex-1 p-6 bg-primary text-black rounded-3xl font-black uppercase text-xs shadow-xl shadow-primary/20">
-                     {isProcessing ? <Zap className="animate-spin" /> : "Confirm Send"}
-                   </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Swap Modal */}
-        <AnimatePresence>
-          {isSwapModalOpen && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
-            >
-              <div className="glass p-12 rounded-[4rem] border border-white/10 w-full max-w-xl relative text-left">
-                <h3 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-8">Atomic Swap</h3>
-                <div className="space-y-6 mb-8">
-                   <div className="flex flex-col gap-2">
-                     <label className="text-[10px] uppercase font-black text-gray-500 font-mono-custom">Pay</label>
-                     <div className="flex gap-2">
-                       <AdminInput placeholder="Amount" value={swapData.amount} onChange={v => setSwapData({...swapData, amount: v})} />
-                       <select value={swapData.from} onChange={e => setSwapData({...swapData, from: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs">
-                          {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
-                       </select>
-                     </div>
-                   </div>
-                   <div className="flex justify-center -my-2"><ArrowDown className="text-primary" /></div>
-                   <div className="flex flex-col gap-2">
-                     <label className="text-[10px] uppercase font-black text-gray-500 font-mono-custom">Receive (Est.)</label>
-                     <div className="flex gap-2">
-                       <div className="flex-1 glass bg-white/5 p-5 rounded-2xl border border-white/10 font-bold text-xs">{(parseFloat(swapData.amount) * 600 || 0).toFixed(2)}</div>
-                       <select value={swapData.to} onChange={e => setSwapData({...swapData, to: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl outline-none border border-white/10 font-black text-xs">
-                          {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
-                       </select>
-                     </div>
-                   </div>
-                </div>
-                <div className="flex gap-4">
-                   <button onClick={() => setIsSwapModalOpen(false)} className="flex-1 p-6 glass border border-white/10 rounded-3xl font-black uppercase text-xs">Cancel</button>
-                   <button onClick={() => { alert('Swap Transaction Broadcasted'); setIsSwapModalOpen(false); }} className="flex-1 p-6 bg-secondary text-black rounded-3xl font-black uppercase text-xs shadow-xl shadow-secondary/20">
-                     Swap Assets
-                   </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <section>
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <p className="text-[12px] text-primary font-black uppercase tracking-widest mb-1 italic font-mono-custom">Protocol Layer</p>
-              <h3 className="text-4xl font-black uppercase italic tracking-tighter font-heading">Assets</h3>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <AssetItem name="BNB Native" symbol="BNB" balance="4.52" value="$2,700.12" color="#F3BA2F" icon="B" />
-            <AssetItem name="Tether" symbol="USDT" balance="12,042" value="$12,042.00" color="#26A17B" icon="T" />
-            <AssetItem name="Ethereum" symbol="ETH" balance="0.124" value="$384.21" color="#627EEA" icon="E" />
-            <AssetItem name="USDC" symbol="USDC" balance="5,200" value="$5,200.00" color="#2775CA" icon="U" />
-          </div>
+        {/* Quick Access Assets */}
+        <section className="mb-12">
+           <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-black italic tracking-tighter font-heading uppercase text-white">Holdings</h3>
+              <button onClick={() => setScreen('wallet-assets')} className="text-[10px] font-black uppercase tracking-widest text-primary hover:opacity-70 font-mono-custom">Full Portfolio</button>
+           </div>
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {Object.entries(balance).filter(([_, v]) => v > 0).map(([ticker, val]) => (
+                <AssetCard key={ticker} ticker={ticker} amount={val} usd={val * EXCHANGE_RATES[ticker]} icon={ticker === 'BNB' ? <Zap className="text-primary" /> : <ShieldCheck className="text-secondary" />} />
+              ))}
+              {Object.values(balance).every(v => v === 0) && (
+                <div className="col-span-full py-10 text-center glass border border-dashed border-white/5 rounded-3xl opacity-30 uppercase font-black text-xs tracking-widest text-white">No active liquidity nodes detected</div>
+              )}
+           </div>
         </section>
       </div>
 
       <div className="lg:col-span-4 space-y-12">
-        <section className="bg-white/[0.02] p-10 rounded-[3.5rem] border border-white/5 text-left">
-           <h3 className="text-2xl font-black italic uppercase mb-8 tracking-tighter font-heading">Protocol Load</h3>
+        <section className="bg-white/[0.02] p-10 rounded-[4rem] border border-white/5 text-left">
+           <div className="flex justify-between items-center mb-10">
+              <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading text-white">Load Analysis</h3>
+              <Target size={18} className="text-gray-600" />
+           </div>
            <UsageProgress 
-             label="Monthly Volume" 
+             label="Monthly Transaction Volume" 
              current={subscription?.monthly_usage_volume || 0} 
              max={currentLimits.vol} 
              prefix="$"
            />
            <UsageProgress 
-             label="Product Registrations" 
+             label="Digital Twin Registrations" 
              current={subscription?.product_usage_count || 0} 
              max={currentLimits.reg} 
            />
+           <div className="mt-8 p-6 glass border border-white/10 rounded-3xl bg-primary/5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 font-mono-custom">Protocol Update</p>
+              <p className="text-xs font-medium text-gray-400 font-nevera">Your node is operating at peak efficiency. Higher tiers available for massive global scale.</p>
+           </div>
+        </section>
+
+        {/* Gas Tracker */}
+        <section className="bg-white/[0.02] p-10 rounded-[4rem] border border-white/5 text-left">
+           <h3 className="text-sm font-black italic uppercase tracking-widest font-heading mb-6 text-gray-500">Gas Tracker</h3>
+           <div className="space-y-4">
+              <GasItem label="Standard" gwei="5.2" usd="0.04" />
+              <GasItem label="Fast" gwei="12.8" usd="0.12" color="text-primary" />
+              <GasItem label="Instant" gwei="24.1" usd="0.35" color="text-secondary" />
+           </div>
         </section>
       </div>
+
+      {/* MODALS */}
+      <AnimatePresence>
+        {isSendModalOpen && (
+          <Modal onClose={() => setIsSendModalOpen(false)} title="Protocol Transfer">
+            <div className="space-y-6">
+               <AdminInput placeholder="Target Thalexa ID or 0x..." value={sendData.to} onChange={v => setSendData({...sendData, to: v})} />
+               <div className="flex gap-4">
+                  <AdminInput placeholder="Amount" type="number" value={sendData.amount} onChange={v => setSendData({...sendData, amount: v})} />
+                  <select value={sendData.currency} onChange={e => setSendData({...sendData, currency: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl border border-white/10 font-bold uppercase text-xs">
+                     {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+               </div>
+               <button onClick={handleSend} className="w-full p-6 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20">Sign Transaction</button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isSwapModalOpen && (
+          <Modal onClose={() => setIsSwapModalOpen(false)} title="Atomic Swap">
+            <div className="space-y-8">
+               <div className="space-y-2">
+                 <label className="text-[10px] text-gray-500 font-black uppercase font-mono-custom">From</label>
+                 <div className="flex gap-3">
+                   <AdminInput placeholder="Quantity" value={swapData.amount} onChange={v => setSwapData({...swapData, amount: v})} />
+                   <select value={swapData.from} onChange={e => setSwapData({...swapData, from: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl border border-white/10 font-bold text-xs uppercase">
+                     {['BNB', 'USDT', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                 </div>
+               </div>
+               <div className="flex justify-center -my-4"><Zap className="text-primary" /></div>
+               <div className="space-y-2">
+                 <label className="text-[10px] text-gray-500 font-black uppercase font-mono-custom">To (Simulated)</label>
+                 <div className="flex gap-3">
+                   <div className="flex-1 glass bg-white/5 p-5 rounded-2xl border border-white/10 font-black text-xs">{(parseFloat(swapData.amount) * (EXCHANGE_RATES[swapData.from] / EXCHANGE_RATES[swapData.to]) || 0).toFixed(4)}</div>
+                   <select value={swapData.to} onChange={e => setSwapData({...swapData, to: e.target.value})} className="glass bg-white/5 p-4 rounded-2xl border border-white/10 font-bold text-xs uppercase">
+                     {['USDT', 'BNB', 'USDC', 'BTC', 'ETH'].map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                 </div>
+               </div>
+               <button onClick={() => { alert('Swap Broadcasted to Mempool'); setIsSwapModalOpen(false); }} className="w-full p-6 bg-secondary text-black rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-secondary/20">Initiate Swap</button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AssetCard({ ticker, amount, usd, icon }) {
+  return (
+    <div className="glass p-8 rounded-[3rem] border border-white/5 flex justify-between items-center group hover:border-white/20 transition-all text-left">
+       <div className="flex items-center gap-6">
+          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center p-3 text-left">
+             {icon}
+          </div>
+          <div className="text-left">
+             <h4 className="text-xl font-black italic uppercase italic tracking-tighter font-heading text-white">{ticker}</h4>
+             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest font-mono-custom">{amount} {ticker}</p>
+          </div>
+       </div>
+       <div className="text-right">
+          <p className="text-lg font-black italic text-white font-heading">${usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+          <p className="text-[8px] text-gray-600 font-black uppercase tracking-[0.3em] font-mono-custom">+2.4%</p>
+       </div>
+    </div>
+  );
+}
+
+function GasItem({ label, gwei, usd, color = "text-white" }) {
+  return (
+    <div className="flex justify-between items-center p-4 glass bg-white/5 border border-white/5 rounded-2xl text-left">
+       <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 font-mono-custom">{label}</span>
+       <div className="text-right">
+          <p className={`text-xs font-black italic font-heading ${color}`}>{gwei} Gwei</p>
+          <p className="text-[8px] text-gray-600 font-black font-mono-custom">${usd}</p>
+       </div>
+    </div>
+  );
+}
+
+function Modal({ children, onClose, title }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+    >
+      <div className="glass p-12 rounded-[5rem] border border-white/10 w-full max-w-xl relative text-left shadow-3xl">
+        <div className="flex justify-between items-center mb-10">
+          <h3 className="text-3xl font-black italic uppercase tracking-tighter font-heading text-white">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">✕</button>
+        </div>
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+function WalletAssetsView({ user, setScreen }) {
+  const [balance, setBalance] = useState({ BNB: 0, USDT: 0, USDC: 0, ETH: 0, BTC: 0 });
+  const EXCHANGE_RATES = { BNB: 621, ETH: 3120, BTC: 64500, USDT: 1, USDC: 1 };
+
+  useEffect(() => {
+    const fetchBalances = async () => {
+      const { data } = await supabase.from('transactions').select('*').eq('user_id', user.id);
+      if (data) {
+        const newBalance = { BNB: 0, USDT: 0, USDC: 0, ETH: 0, BTC: 0 };
+        data.forEach(tx => {
+           if (tx.type === 'receive' || tx.type === 'deposit') {
+             newBalance[tx.currency] += tx.amount;
+           } else if (tx.type === 'send' || tx.type === 'withdraw') {
+             newBalance[tx.currency] -= tx.amount;
+           }
+        });
+        setBalance(newBalance);
+      }
+    };
+    fetchBalances();
+  }, [user.id]);
+
+  const assets = Object.entries(balance).map(([ticker, amount]) => ({
+    ticker,
+    amount,
+    usd: amount * (EXCHANGE_RATES[ticker] || 0),
+    gain: '0.0%' // Hardcoded for now as we don't track historical prices for all
+  }));
+
+  return (
+    <div className="p-6 md:p-12 max-w-7xl w-full mx-auto text-left">
+       <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-12">Protocol Portfolio</h2>
+       <div className="space-y-4">
+          {assets.map(a => (
+            <div key={a.ticker} className="glass p-8 rounded-[3rem] border border-white/5 flex justify-between items-center">
+               <div className="flex items-center gap-6">
+                  <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black italic text-primary">{a.ticker[0]}</div>
+                  <div>
+                    <h4 className="text-xl font-black italic font-heading">{a.ticker}</h4>
+                    <p className="text-[10px] text-gray-500 font-bold font-mono-custom">{a.amount} {a.ticker}</p>
+                  </div>
+               </div>
+               <div className="text-right">
+                  <p className="text-xl font-black italic font-heading">${a.usd.toLocaleString()}</p>
+                  <p className={`text-[10px] font-black font-mono-custom ${a.gain.startsWith('+') ? 'text-primary' : 'text-red-500'}`}>{a.gain}</p>
+               </div>
+            </div>
+          ))}
+       </div>
+    </div>
+  );
+}
+
+function PayView({ user, setScreen }) {
+  const [amount, setAmount] = useState('');
+  const [bank, setBank] = useState('');
+  
+  return (
+    <div className="p-6 md:p-12 max-w-4xl w-full mx-auto text-left">
+       <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-6">Thalexa Pay <span className="text-primary">Off-Ramp</span></h2>
+       <p className="text-gray-500 mb-12 font-medium font-nevera">Direct settlement from protocol liquidity to local banking nodes (powered by Paystack Engine).</p>
+       
+       <div className="space-y-8 glass p-12 rounded-[4rem] border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <FormInput label="Settlement Amount (USDC/USDT)" placeholder="e.g. 500" value={amount} onChange={setAmount} />
+             <div className="flex flex-col gap-3">
+                <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Target Bank</label>
+                <select 
+                  value={bank}
+                  onChange={(e) => setBank(e.target.value)}
+                  className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase"
+                >
+                   <option value="">Select Local Node</option>
+                   <option value="GTB">GTBank</option>
+                   <option value="ZENITH">Zenith Bank</option>
+                   <option value="ACCESS">Access Bank</option>
+                   <option value="KUDA">Kuda Microfinance</option>
+                </select>
+             </div>
+          </div>
+          <FormInput label="Account Numeration" placeholder="e.g. 0123456789" />
+          
+          <div className="p-8 bg-black/40 rounded-3xl border border-white/10 space-y-3">
+             <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
+                <span>Network Fee</span> <span>0.5%</span>
+             </div>
+             <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
+                <span>Settlement Speed</span> <span>Instant (Local Relay)</span>
+             </div>
+             <div className="flex justify-between text-[12px] font-black font-mono-custom text-primary uppercase pt-4 border-t border-white/5">
+                <span>Receiving (NGN)</span> <span>~₦{ (parseFloat(amount) * 1550 || 0).toLocaleString() }</span>
+             </div>
+          </div>
+          
+          <button onClick={() => alert('Settlement Initialized: Transaction ID Generated')} className="w-full p-8 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:scale-[1.02] transition-all">Authorize Settlement</button>
+       </div>
+    </div>
+  );
+}
+
+function NotificationsView({ user }) {
+  const [notes, setNotes] = useState([]);
+  
+  useEffect(() => {
+    supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(20)
+      .then(({ data }) => data && setNotes(data));
+  }, []);
+
+  return (
+    <div className="p-6 md:p-12 max-w-4xl w-full mx-auto text-left">
+       <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-12">Protocol Log</h2>
+       <div className="space-y-4">
+          {notes.length > 0 ? notes.map(n => (
+            <div key={n.id} className="glass p-8 rounded-3xl border border-white/5 group hover:border-primary/20 transition-all">
+               <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-2 font-mono-custom">{n.type}</p>
+               <h4 className="text-xl font-black italic font-heading mb-2">{n.title}</h4>
+               <p className="text-sm text-gray-500 font-nevera">{n.content}</p>
+            </div>
+          )) : (
+            <div className="py-20 text-center glass border border-dashed border-white/5 rounded-3xl opacity-30 uppercase font-black text-xs tracking-widest">No protocol handshakes recorded</div>
+          )}
+       </div>
     </div>
   );
 }
@@ -1428,39 +1653,69 @@ function UsageProgress({ label, current, max, prefix = "" }) {
 }
 
 function Onboarding({ onLogin, loading }) {
-  return (
-    <div className="h-screen w-full flex flex-col items-center justify-center p-8 text-center bg-black relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent"></div>
-      
-      <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-48 h-48 bg-primary/10 rounded-[4rem] border border-primary/20 flex items-center justify-center mb-12 relative z-10 shadow-3xl shadow-primary/10"
-      >
-        <ShieldCheck size={96} className="text-primary" />
-        <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full animate-pulse"></div>
-      </motion.div>
-      
-      <h1 className="text-7xl md:text-9xl font-black italic tracking-tighter uppercase mb-6 relative z-10 font-heading">Thalexa</h1>
-      <p className="text-gray-500 mb-12 text-xl font-medium max-w-lg relative z-10 font-nevera">Secure Web3 verification, escrow, and global commerce infrastructure. <br /> Powered by BNB Chain.</p>
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState({ email: 'emmanuelobed877@gmail.com', username: '', country: 'Nigeria', accepted: false });
 
-      <div className="w-full max-w-lg space-y-6 relative z-10">
-        <button 
-          onClick={onLogin}
-          disabled={loading}
-          className="group w-full glass bg-white p-10 rounded-[3rem] flex items-center justify-center gap-4 hover:bg-primary transition-all shadow-2xl relative overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-primary/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-          {loading ? (
-            <Zap className="animate-spin text-black" size={32} />
-          ) : (
-            <span className="relative z-10 font-black uppercase tracking-widest text-xl text-black font-heading flex items-center gap-3">
-              <Zap size={24} /> Access Verification Hub
-            </span>
-          )}
-        </button>
-        <p className="text-[12px] text-gray-600 uppercase font-black tracking-[0.4em] py-4 italic font-mono-custom animate-pulse">MPC Wallet Generation Active</p>
-      </div>
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-black">
+       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] -z-10"></div>
+       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[120px] -z-10"></div>
+       
+       <motion.div 
+         initial={{ y: 20, opacity: 0 }}
+         animate={{ y: 0, opacity: 1 }}
+         className="glass p-12 md:p-16 rounded-[4rem] border border-white/10 w-full max-w-2xl text-left"
+       >
+          <div className="flex items-center gap-4 mb-12">
+             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-black font-black italic font-heading">T</div>
+             <p className="text-xl font-black italic uppercase tracking-tighter font-heading text-white">Handshake Protocol</p>
+          </div>
+      
+          <AnimatePresence mode="wait">
+             {step === 1 && (
+               <motion.div key="1" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                  <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading mb-4 text-white">Initialize <span className="text-primary">Identity</span></h2>
+                  <p className="text-gray-500 mb-10 font-medium font-nevera">Your Thalexa ID will be automatically generated upon profile creation.</p>
+                  <div className="space-y-6 mb-12">
+                     <FormInput label="Thalexa Username" placeholder="e.g. Satoshi_42" value={data.username} onChange={v => setData({...data, username: v})} />
+                     <div className="flex flex-col gap-3">
+                        <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Region Node</label>
+                        <select 
+                          value={data.country}
+                          onChange={(e) => setData({...data, country: e.target.value})}
+                          className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white"
+                        >
+                           {['Global', 'Nigeria', 'USA', 'UK', 'Germany', 'Japan', 'China'].map(c => <option key={c} value={c} className="bg-black">{c}</option>)}
+                        </select>
+                     </div>
+                  </div>
+                  <button onClick={() => setStep(2)} disabled={!data.username} className="w-full p-8 bg-white text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-primary transition-all disabled:opacity-30">Next Step</button>
+               </motion.div>
+             )}
+
+             {step === 2 && (
+               <motion.div key="2" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                  <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading mb-4 text-white">Security <br/> <span className="text-secondary">Handshake</span></h2>
+                  <p className="text-gray-500 mb-10 font-medium font-nevera">Connect your communication node and accept the Thalexa Covenant.</p>
+                  <div className="space-y-6 mb-12">
+                     <FormInput label="Contact Node (Email)" placeholder="node@protocol.io" value={data.email} onChange={v => setData({...data, email: v})} />
+                     <div className="flex items-center gap-4 p-6 glass border border-white/10 rounded-3xl cursor-pointer" onClick={() => setData({...data, accepted: !data.accepted})}>
+                        <div className={`w-6 h-6 rounded-lg border-2 border-primary flex items-center justify-center ${data.accepted ? 'bg-primary' : ''}`}>
+                           {data.accepted && <CheckCircle2 size={14} className="text-black" />}
+                        </div>
+                        <p className="text-[10px] font-black uppercase text-gray-500 font-mono-custom">I accept the immutable protocol terms</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-4">
+                     <button onClick={() => setStep(1)} className="flex-1 p-8 glass border border-white/10 rounded-3xl font-black uppercase text-xs text-white">Back</button>
+                     <button onClick={() => onLogin(data)} disabled={!data.accepted || loading} className="flex-[2] p-8 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] disabled:opacity-30 flex items-center justify-center">
+                        {loading ? <Zap className="animate-spin text-black" /> : "Authorize Node"}
+                     </button>
+                  </div>
+               </motion.div>
+             )}
+          </AnimatePresence>
+       </motion.div>
     </div>
   );
 }
