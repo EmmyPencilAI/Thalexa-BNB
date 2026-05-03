@@ -47,6 +47,7 @@ function App() {
   const [screen, setScreen] = useState('landing');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [announcement, setAnnouncement] = useState(null);
 
   useEffect(() => {
     // Fetch Live Pulse
@@ -54,12 +55,16 @@ function App() {
       .then(r => r.json())
       .then(data => setStats(data));
 
-    // Check for payment redirect status
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_status') === 'success') {
-      alert('Subscription Activated via Paystack! Reference: ' + params.get('reference'));
-      window.history.replaceState({}, document.title, "/");
-    }
+    // Listen for broadcast updates (Simulating real-time WebSocket/Polling)
+    const interval = setInterval(() => {
+      fetch('/api/broadcast')
+        .then(r => r.json())
+        .then(data => {
+          if (data.message) setAnnouncement(data);
+        });
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogin = () => {
@@ -80,7 +85,11 @@ function App() {
   };
 
   const renderScreen = () => {
-    if (!user && screen !== 'landing') return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
+    // Corrected navigation logic:
+    if (!user) {
+      if (screen === 'onboarding') return <Onboarding onLogin={handleLogin} loading={loading} />;
+      return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
+    }
 
     switch (screen) {
       case 'landing': return <LandingPage onStart={() => setScreen('onboarding')} stats={stats} />;
@@ -98,6 +107,22 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
+      {/* Global Announcement Banner */}
+      <AnimatePresence>
+        {announcement && (
+          <motion.div 
+            initial={{ y: -100 }}
+            animate={{ y: 0 }}
+            exit={{ y: -100 }}
+            className="fixed top-0 left-0 right-0 z-[100] bg-primary text-black p-4 font-black text-center uppercase italic tracking-tighter shadow-2xl flex justify-center items-center gap-4"
+          >
+            <Zap size={20} className="animate-pulse" />
+            <span>{announcement.message}</span>
+            <button onClick={() => setAnnouncement(null)} className="ml-4 opacity-50 hover:opacity-100">✕</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={screen}
@@ -766,11 +791,48 @@ function NavItem({ icon, active, onClick }) {
 }
 
 function AdminView({ setScreen, stats }) {
-  const [logs] = useState([
+  const [logs, setLogs] = useState([
     { id: 1, action: 'Product Registered', details: 'GG_THLX_000042', time: '10m ago', status: 'SUCCESS', cid: 'QmXoyp...7V2c' },
     { id: 2, action: 'Escrow Created', details: '2.5 BNB Locked', time: '2h ago', status: 'SUCCESS' },
     { id: 3, action: 'IPFS Pinning', details: 'Luxury Watch X1', time: '5h ago', status: 'SYNCED', cid: 'QmXo...2c' },
   ]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const actions = ['Asset release', 'Auth handshake', 'Node sync', 'Registry query', 'Escrow funded'];
+      const statuses = ['SUCCESS', 'SYNCED', 'PENDING'];
+      const newLog = {
+        id: Date.now(),
+        action: actions[Math.floor(Math.random() * actions.length)],
+        time: 'Just now',
+        status: statuses[Math.floor(Math.random() * statuses.length)],
+        tx: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 4)
+      };
+      setLogs(prev => [newLog, ...prev.slice(0, 4)]);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handleBroadcast = async () => {
+    if (!broadcastMsg) return;
+    setIsPublishing(true);
+    try {
+      await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: broadcastMsg })
+      });
+      setBroadcastMsg('');
+      alert('Network Broadcast Sent.');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   return (
     <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -788,6 +850,26 @@ function AdminView({ setScreen, stats }) {
             <p className="text-2xl font-black text-primary font-heading italic tracking-tighter">v1.2.4-PROD</p>
           </div>
         </header>
+
+        <section className="mb-12">
+           <h3 className="text-xl font-black italic uppercase mb-6 tracking-tighter font-heading text-primary">Protocol Broadcast</h3>
+           <div className="flex gap-4">
+              <input 
+                type="text" 
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                placeholder="Push network-wide protocol alert..."
+                className="flex-1 glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 focus:border-primary transition-all font-bold uppercase tracking-widest text-xs font-mono-custom"
+              />
+              <button 
+                onClick={handleBroadcast}
+                disabled={isPublishing}
+                className="bg-primary text-black px-10 py-6 rounded-3xl font-black uppercase text-xs font-heading hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
+              >
+                {isPublishing ? <Zap className="animate-spin" /> : <><Zap size={18}/> Push 10.4k Nodes</>}
+              </button>
+           </div>
+        </section>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             <AdminStat label="Total Assets" val="$324.5M" delta="+12.4%" icon={<TrendingUp size={28}/>} />

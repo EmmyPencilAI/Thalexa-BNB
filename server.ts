@@ -76,6 +76,26 @@ async function startServer() {
     }
   });
 
+  // Mock global broadcast state
+  let currentBroadcast = { message: null, timestamp: 0 };
+
+  // Broadcast API
+  app.post('/api/broadcast', (req, res) => {
+    currentBroadcast = { 
+      message: req.body.message,
+      timestamp: Date.now() 
+    };
+    res.json({ status: 'success' });
+  });
+
+  app.get('/api/broadcast', (req, res) => {
+    // Expire broadcast after 15 seconds
+    if (Date.now() - currentBroadcast.timestamp > 15000) {
+      currentBroadcast = { message: null, timestamp: 0 };
+    }
+    res.json(currentBroadcast);
+  });
+
   // Live System Stats (Real Data Only)
   app.get('/api/stats', async (req, res) => {
     try {
