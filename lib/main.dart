@@ -4,9 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thalexa/theme.dart';
 import 'package:thalexa/screens/onboarding_screen.dart';
-import 'package:thalexa/screens/home_screen.dart';
+import 'package:thalexa/screens/qr_scanner_screen.dart';
 import 'package:thalexa/screens/wallet_screen.dart';
-import 'package:thalexa/screens/scan_screen.dart';
 import 'package:thalexa/screens/products_screen.dart';
 import 'package:thalexa/screens/settings_screen.dart';
 
@@ -34,7 +33,7 @@ final _router = GoRouter(
       builder: (context, state) => const MainNavigationWrapper(),
       routes: [
         GoRoute(path: 'wallet', builder: (context, state) => const WalletScreen()),
-        GoRoute(path: 'scan', builder: (context, state) => const ScanScreen()),
+        GoRoute(path: 'scan', builder: (context, state) => const QRScannerScreen()),
         GoRoute(path: 'products', builder: (context, state) => const ProductsScreen()),
         GoRoute(path: 'settings', builder: (context, state) => const SettingsScreen()),
       ],
@@ -68,7 +67,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   final List<Widget> _screens = [
     const WalletScreen(),
-    const ScanScreen(),
+    const QRScannerScreen(),
     const ProductsScreen(),
     const SettingsScreen(),
   ];

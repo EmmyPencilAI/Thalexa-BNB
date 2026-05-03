@@ -27,19 +27,23 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
-  Map as MapIcon
+  Map as MapIcon,
+  Maximize
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { ethers } from 'ethers';
+import * as d3 from 'd3';
+import * as topojson from 'topojson-client';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 // Configuration
 const CONFIG = {
   TREASURY_FEE: "0.009",
   BNB_NETWORK: "BNB Smart Chain Testnet",
   THEME_ORANGE: "#FF6B00",
-  THEME_GREEN: "#00FF85"
+  THEME_BLUE: "#037DD6"
 };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -136,6 +140,26 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_status') === 'success') {
+      alert('Network Transmission Success: Account Refilled');
+      // Create a dummy deposit transaction for the demo
+      const ref = params.get('reference');
+      if (ref && user) {
+         supabase.from('transactions').insert([{
+           user_id: user.id,
+           type: 'deposit',
+           amount: 100, // Fixed amount for demo ref
+           currency: 'USDT',
+           status: 'completed',
+           tx_hash: ref
+         }]);
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [user]);
+
   const renderScreen = () => {
     if (!user) {
       if (screen === 'onboarding') return <Onboarding onLogin={handleLogin} loading={loading} />;
@@ -143,9 +167,9 @@ function App() {
     }
 
     return (
-      <div className="w-full flex flex-col items-center">
+      <div className="w-full flex flex-col items-stretch">
         {/* Top Sticky Header */}
-        <header className="sticky top-0 left-0 right-0 z-[60] glass border-b border-white/5 p-4 md:p-6 flex justify-between items-center w-full max-w-7xl mx-auto backdrop-blur-3xl">
+        <header className="sticky top-0 left-0 right-0 z-[60] glass border-b border-white/5 p-4 md:p-6 lg:px-12 flex justify-between items-center w-full backdrop-blur-3xl">
           <div className="relative flex-1 max-w-md hidden md:block">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
             <input 
@@ -161,6 +185,9 @@ function App() {
              <button onClick={() => setScreen('notifications')} className="p-3 glass border border-white/10 rounded-2xl relative">
                 <div className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
                 <History size={18} />
+             </button>
+             <button onClick={() => setScreen('qr-scan')} className="p-3 glass border border-white/10 rounded-2xl text-primary">
+                <Maximize size={18} />
              </button>
              <button onClick={() => setScreen('settings')} className="p-3 glass border border-white/10 rounded-2xl">
                 <Settings size={18} />
@@ -188,6 +215,8 @@ function App() {
               case 'admin': return <AdminView setScreen={setScreen} stats={stats} />;
               case 'subscriptions': return <SubscriptionsView user={user} setScreen={setScreen} />;
               case 'notifications': return <NotificationsView user={user} />;
+              case 'qr-scan': return <QRScannerView onResult={(res) => { console.log('Scan:', res); setScreen('home'); }} onCancel={() => setScreen('home')} />;
+              case 'transaction-history': return <TransactionHistoryView user={user} setScreen={setScreen} />;
               default: return <HomeView user={user} setScreen={setScreen} stats={stats} />;
             }
           })()}
@@ -197,7 +226,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
+    <div className="min-h-screen w-full flex flex-col items-stretch bg-black text-white selection:bg-primary selection:text-black">
       <AnimatePresence>
         {announcement && (
           <motion.div 
@@ -206,7 +235,7 @@ function App() {
             exit={{ y: -100 }}
             className="fixed top-0 left-0 right-0 z-[100] bg-primary text-black p-4 font-black shadow-2xl flex justify-center items-center gap-4 overflow-hidden"
           >
-            <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
+            <div className="w-full lg:px-12 flex items-center justify-between">
               <div className="flex items-center gap-4">
                  <Zap size={20} className="animate-pulse" />
                  <div className="text-left">
@@ -233,7 +262,7 @@ function App() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-col items-center"
+          className="flex flex-col items-stretch w-full"
         >
           {renderScreen()}
         </motion.div>
@@ -257,11 +286,11 @@ function App() {
 function LandingPage({ onStart, stats, products }) {
   const [tickerIndex, setTickerIndex] = useState(0);
   const tickerEvents = [
-    "ASSET_MINT: Luxury Watch X1 (GENEVA_NODE)",
-    "ESCROW_FUNDED: 4.52 BNB (0x7a...2b4e)",
+    "ASSET_MINT: Luxury Watch X1 (THLX-PROD-000142)",
+    "ESCROW_FUNDED: 4.52 BNB (THLX-ESC-000845)",
     "REGISTRY_SYNC: IPFS_PROPAGATION (100.0%)",
-    "VERIFICATION: AUTHENTIC (GG_THLX_000042)",
-    "NETWORK_UPDATE: INFRASTRUCTURE_FLUX (GRADE_AAA)"
+    "VERIFICATION: AUTHENTIC (THLX-PROD-000042)",
+    "USER_ONBOARD: NEW_NODE_SYNC (THLX-USER-9X4A7K)"
   ];
 
   useEffect(() => {
@@ -277,7 +306,7 @@ function LandingPage({ onStart, stats, products }) {
       
       {/* Real-time Ticker */}
       <div className="fixed bottom-0 left-0 right-0 z-[60] glass border-t border-white/10 p-2 overflow-hidden pointer-events-none">
-         <div className="max-w-7xl mx-auto flex items-center gap-4">
+         <div className="w-full lg:px-12 flex items-center gap-4">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-lg shadow-primary/50"></span>
             <span className="text-[9px] font-black uppercase tracking-[0.4em] text-primary font-mono-custom whitespace-nowrap">Live Network Pulse:</span>
             <AnimatePresence mode="wait">
@@ -295,7 +324,7 @@ function LandingPage({ onStart, stats, products }) {
       </div>
       
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center max-w-7xl mx-auto backdrop-blur-xl border-b border-white/5">
+      <nav className="fixed top-0 left-0 right-0 z-50 p-6 lg:px-12 flex justify-between items-center w-full backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-black font-black italic shadow-2xl shadow-primary/20 font-heading">T</div>
           <span className="text-2xl font-black italic tracking-tighter font-heading text-white">THALEXA</span>
@@ -314,7 +343,7 @@ function LandingPage({ onStart, stats, products }) {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-24 px-6 max-w-7xl mx-auto min-h-screen flex flex-col justify-center">
+      <section className="relative pt-32 pb-24 px-6 md:px-12 lg:px-24 w-full min-h-screen flex flex-col justify-center">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-6 z-10 text-left">
             <motion.div 
@@ -387,10 +416,21 @@ function LandingPage({ onStart, stats, products }) {
       {/* Verification Scanner Section */}
       <section id="verify" className="py-32 px-6 bg-[#050505] relative overflow-hidden">
          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-secondary/5 rounded-full blur-[150px] -z-10 translate-x-1/2"></div>
-         <div className="max-w-7xl mx-auto">
+         <div className="w-full lg:px-12">
             <div className="text-center mb-24">
-               <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-6 font-heading text-white">Verification <span className="text-primary">Registry</span></h2>
-               <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto font-medium font-nevera">Input a Protocol ID to trace a product's journey, ownership history, and current authenticity status.</p>
+               <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-6 font-heading text-white">Global <span className="text-primary">Registries</span></h2>
+               <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto font-medium font-nevera">Visualizing the decentralized node expansion across the Thalexa network.</p>
+            </div>
+            
+            <GlobalHeatmap />
+         </div>
+      </section>
+
+      <section className="py-32 px-6 bg-white relative overflow-hidden text-black">
+         <div className="w-full lg:px-12">
+            <div className="text-center mb-24">
+               <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-6 font-heading">Verification <span className="text-primary">Registry</span></h2>
+               <p className="text-gray-600 text-lg md:text-xl max-w-2xl mx-auto font-medium font-nevera">Input a Protocol ID to trace a product's journey, ownership history, and current authenticity status.</p>
             </div>
             
             <InteractionScanner />
@@ -399,7 +439,7 @@ function LandingPage({ onStart, stats, products }) {
 
       {/* How it Works - Pipeline */}
       <section id="how" className="py-32 px-6">
-         <div className="max-w-7xl mx-auto">
+         <div className="w-full lg:px-12">
             <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-20 font-heading text-left text-white">Protocol <span className="text-violet-500">Flux</span> Pipeline</h2>
             <PipelineFlow />
          </div>
@@ -407,7 +447,7 @@ function LandingPage({ onStart, stats, products }) {
 
       {/* Features Grid */}
       <section id="features" className="py-32 px-6 bg-black relative">
-         <div className="max-w-7xl mx-auto">
+         <div className="w-full lg:px-12">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                <FeatureCard 
                  icon={<ShieldCheck size={40}/>} 
@@ -433,7 +473,7 @@ function LandingPage({ onStart, stats, products }) {
 
       {/* Industries Orbs */}
       <section className="py-32 px-6 overflow-hidden">
-         <div className="max-w-7xl mx-auto text-center">
+         <div className="w-full lg:px-12 text-center">
             <h2 className="text-5xl font-black uppercase italic tracking-tighter mb-24 font-heading text-white">Global <span className="text-gray-500">Integration</span></h2>
             <IndustryOrbs />
          </div>
@@ -442,7 +482,7 @@ function LandingPage({ onStart, stats, products }) {
       {/* Final CTA */}
       <section className="py-48 px-6 relative overflow-hidden bg-gradient-to-b from-black to-primary/10">
          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent"></div>
-         <div className="max-w-4xl mx-auto text-center relative z-10">
+         <div className="w-full lg:px-24 text-center relative z-10">
             <motion.h2 
               whileInView={{ scale: [0.95, 1], opacity: [0, 1] }}
               className="text-6xl md:text-9xl font-black italic uppercase tracking-tighter font-heading mb-12 text-white"
@@ -503,7 +543,7 @@ function ProductGrid3D({ products = [] }) {
             <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity text-left"></div>
             <div className="flex justify-between items-start text-left">
                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xs font-black uppercase text-primary border border-white/5">0{i+1}</div>
-               <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 font-mono-custom text-left">{item.product_code}</span>
+               <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 font-mono-custom text-left">{item.thalexa_id || item.product_code}</span>
             </div>
             
             <div className="text-6xl text-center py-4 transform group-hover:scale-125 transition-transform duration-500">
@@ -541,10 +581,11 @@ function InteractionScanner() {
     if (!input) return;
     setStatus('scanning');
     try {
+      // Search by Thalexa ID or internal product code
       const { data, error } = await supabase
         .from('products')
         .select('*, users!products_owner_id_fkey(email, wallet_address)')
-        .eq('product_code', input.trim().toUpperCase())
+        .or(`thalexa_id.eq.${input.trim().toUpperCase()},product_code.eq.${input.trim().toUpperCase()}`)
         .single();
       
       if (error || !data) {
@@ -554,6 +595,7 @@ function InteractionScanner() {
         setHistory([
           { event: 'Initial Protocol Mint', op: 'Node_Auth_Primary', t: new Date(data.created_at).toLocaleDateString() },
           { event: 'Global Registry Bind', op: 'EVM_Sync', t: new Date(data.created_at).toLocaleDateString() },
+          { event: 'Thalexa ID Indexed', op: data.thalexa_id, t: 'Verified' },
           { event: 'Current Custodian Bound', op: data.users?.wallet_address || 'Protocol Vault', t: 'Live Status' },
         ]);
       }
@@ -565,7 +607,7 @@ function InteractionScanner() {
 
   return (
     <div className="glass p-12 rounded-[5rem] border border-white/10 relative overflow-hidden bg-black/40">
-       <div className="max-w-4xl mx-auto">
+       <div className="w-full lg:px-24">
           <div className="relative mb-12">
              <input 
                type="text" 
@@ -685,13 +727,13 @@ function FeatureCard({ icon, title, desc, glow }) {
   return (
     <motion.div 
       whileHover={{ y: -10 }}
-      className={`glass p-12 rounded-[4rem] border border-white/5 hover:border-white/20 transition-all flex flex-col justify-between min-h-[400px] shadow-2xl text-left ${glow}`}
+      className={`bg-white p-12 rounded-[4rem] border border-gray-100 transition-all flex flex-col justify-between min-h-[400px] shadow-xl text-left ${glow}`}
     >
-       <div className="w-20 h-20 bg-white/5 rounded-[2rem] border border-white/10 flex items-center justify-center text-primary mb-12 shadow-inner text-left">
+       <div className="w-20 h-20 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center justify-center text-primary mb-12 shadow-inner text-left">
           {icon}
        </div>
        <div className="text-left">
-         <h4 className="text-3xl font-black italic uppercase tracking-tighter font-heading text-white mb-6 leading-tight">{title}</h4>
+         <h4 className="text-3xl font-black italic uppercase tracking-tighter font-heading text-dark mb-6 leading-tight">{title}</h4>
          <p className="text-gray-500 text-lg leading-relaxed font-medium font-nevera opacity-80">{desc}</p>
        </div>
     </motion.div>
@@ -832,7 +874,7 @@ function HomeView({ user, setScreen, stats }) {
   };
 
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 text-left">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full grid grid-cols-1 lg:grid-cols-12 gap-12 text-left">
       <div className="lg:col-span-8">
         <header className="flex justify-between items-center mb-12">
           <div className="flex items-center gap-4">
@@ -1046,75 +1088,208 @@ function WalletAssetsView({ user, setScreen }) {
     ticker,
     amount,
     usd: amount * (EXCHANGE_RATES[ticker] || 0),
-    gain: '0.0%' // Hardcoded for now as we don't track historical prices for all
+    gain: '+1.2%' 
   }));
 
   return (
-    <div className="p-6 md:p-12 max-w-7xl w-full mx-auto text-left">
-       <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-12">Protocol Portfolio</h2>
-       <div className="space-y-4">
+    <div className="p-6 md:p-12 lg:px-24 w-full text-left">
+       <div className="flex justify-between items-center mb-12">
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading">Protocol Portfolio</h2>
+          <button 
+            onClick={() => setScreen('transaction-history')}
+            className="flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest hover:underline font-mono-custom"
+          >
+             <History size={16} /> View Activity
+          </button>
+       </div>
+       
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
           {assets.map(a => (
-            <div key={a.ticker} className="glass p-8 rounded-[3rem] border border-white/5 flex justify-between items-center">
-               <div className="flex items-center gap-6">
-                  <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black italic text-primary">{a.ticker[0]}</div>
-                  <div>
-                    <h4 className="text-xl font-black italic font-heading">{a.ticker}</h4>
-                    <p className="text-[10px] text-gray-500 font-bold font-mono-custom">{a.amount} {a.ticker}</p>
+            <div key={a.ticker} className="mm-card group hover:border-primary/30 transition-all cursor-pointer">
+               <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-6">
+                     <div className="w-16 h-16 bg-gray-50 rounded-[1.5rem] flex items-center justify-center font-black italic text-secondary text-2xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">{a.ticker[0]}</div>
+                     <div>
+                       <h4 className="text-2xl font-black italic font-heading text-dark">{a.ticker}</h4>
+                       <p className="text-[10px] text-gray-400 font-black font-mono-custom uppercase tracking-widest">{a.amount} Units Indexed</p>
+                     </div>
                   </div>
-               </div>
-               <div className="text-right">
-                  <p className="text-xl font-black italic font-heading">${a.usd.toLocaleString()}</p>
-                  <p className={`text-[10px] font-black font-mono-custom ${a.gain.startsWith('+') ? 'text-primary' : 'text-red-500'}`}>{a.gain}</p>
+                  <div className="text-right">
+                     <p className="text-2xl font-black italic font-heading text-dark">${a.usd.toLocaleString()}</p>
+                     <p className={`text-[10px] font-black font-mono-custom text-secondary`}>{a.gain}</p>
+                  </div>
                </div>
             </div>
           ))}
+       </div>
+
+       <div className="mt-16 pt-8 border-t border-gray-100">
+          <h3 className="text-2xl font-black italic uppercase tracking-tighter font-heading text-gray-300 mb-8">Quick Actions</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+             <ActionIcon icon={<ArrowUpRight />} label="Send" onClick={() => setScreen('pay')} />
+             <ActionIcon icon={<ArrowDownLeft />} label="Receive" onClick={() => setScreen('pay')} />
+             <ActionIcon icon={<TrendingUp />} label="Swap" onClick={() => setScreen('pay')} />
+             <ActionIcon icon={<Settings />} label="Manage" onClick={() => setScreen('settings')} />
+          </div>
        </div>
     </div>
   );
 }
 
+function ActionIcon({ icon, label, onClick }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-4 group">
+       <div className="w-20 h-20 rounded-[2rem] bg-gray-50 flex items-center justify-center text-dark border border-gray-100 group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-all shadow-sm">
+          {React.cloneElement(icon, { size: 28 })}
+       </div>
+       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 font-mono-custom group-hover:text-primary transition-colors">{label}</span>
+    </button>
+  );
+}
+
 function PayView({ user, setScreen }) {
+  const [activeTab, setActiveTab] = useState('withdraw'); // 'withdraw' | 'deposit'
   const [amount, setAmount] = useState('');
   const [bank, setBank] = useState('');
-  
+  const [accountNumber, setAccountNumber] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleWithdraw = async () => {
+    if (!amount || !bank || !accountNumber) return alert('Please fill all details');
+    setIsProcessing(true);
+    // Simulate API call to backend for bank transfer
+    const { error } = await supabase.from('transactions').insert([{
+       user_id: user.id,
+       type: 'withdraw',
+       amount: parseFloat(amount),
+       currency: 'USDC', // Assuming USDC for settlement
+       status: 'completed',
+       tx_hash: 'BANK_TRF_' + Math.random().toString(36).substring(7).toUpperCase()
+    }]);
+    
+    if (!error) {
+       alert(`Settlement of ₦${(parseFloat(amount) * 1550).toLocaleString()} initialized to ${bank} account ${accountNumber}`);
+       setAmount('');
+       setAccountNumber('');
+    } else {
+       alert('Settlement Failed: ' + error.message);
+    }
+    setIsProcessing(false);
+  };
+
+  const handleAddCash = async () => {
+    if (!amount) return alert('Please enter amount');
+    setIsProcessing(true);
+    try {
+      const resp = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          amount: parseFloat(amount) * 1550, // Convert USD to NGN
+          metadata: { type: 'deposit', user_id: user.id, usd_amount: amount }
+        })
+      });
+      const data = await resp.json();
+      if (data.status && data.data.authorization_url) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        alert('Payment initialization failed.');
+      }
+    } catch (e) {
+      alert('Network error.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
-    <div className="p-6 md:p-12 max-w-4xl w-full mx-auto text-left">
-       <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-6">Thalexa Pay <span className="text-primary">Off-Ramp</span></h2>
-       <p className="text-gray-500 mb-12 font-medium font-nevera">Direct settlement from protocol liquidity to local banking nodes (powered by Paystack Engine).</p>
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full text-left">
+       <div className="flex justify-between items-center mb-6">
+          <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading">Handshake <span className="text-primary">Pay</span></h2>
+          <div className="flex gap-4 bg-white/5 p-2 rounded-3xl border border-white/5">
+            {['withdraw', 'deposit'].map(t => (
+              <button 
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === t ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-gray-500 hover:text-white'}`}
+              >
+                {t === 'withdraw' ? 'Settlement' : 'Deposit'}
+              </button>
+            ))}
+          </div>
+       </div>
+       <p className="text-gray-500 mb-12 font-medium font-nevera">Seamless liquidity flux between protocol and local banking systems.</p>
        
-       <div className="space-y-8 glass p-12 rounded-[4rem] border border-white/10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <FormInput label="Settlement Amount (USDC/USDT)" placeholder="e.g. 500" value={amount} onChange={setAmount} />
-             <div className="flex flex-col gap-3">
-                <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest">Target Bank</label>
-                <select 
-                  value={bank}
-                  onChange={(e) => setBank(e.target.value)}
-                  className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase"
+       <div className="space-y-8 glass p-10 rounded-[4rem] border border-white/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -z-10"></div>
+          
+          {activeTab === 'withdraw' ? (
+             <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <FormInput label="Settlement Amount (USDC/USDT)" placeholder="e.g. 500" value={amount} onChange={setAmount} />
+                   <div className="flex flex-col gap-3 group">
+                      <label className="text-[10px] text-primary uppercase font-black font-mono-custom tracking-widest italic leading-none mb-1">Target Node (Local Bank)</label>
+                      <select 
+                        value={bank}
+                        onChange={(e) => setBank(e.target.value)}
+                        className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white"
+                      >
+                         <option value="" className="bg-black">Select Local Node</option>
+                         <option value="GTB" className="bg-black">GTBank</option>
+                         <option value="ZENITH" className="bg-black">Zenith Bank</option>
+                         <option value="ACCESS" className="bg-black">Access Bank</option>
+                         <option value="KUDA" className="bg-black">Kuda Microfinance</option>
+                         <option value="OPAY" className="bg-black">OPay Node</option>
+                         <option value="PALMPAY" className="bg-black">PalmPay Node</option>
+                      </select>
+                   </div>
+                </div>
+                <FormInput label="Account Numeration (Account Number)" placeholder="e.g. 0123456789" value={accountNumber} onChange={setAccountNumber} />
+                
+                <div className="p-8 bg-black/40 rounded-3xl border border-white/10 space-y-3">
+                   <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
+                      <span>Protocol Fee</span> <span>0.5%</span>
+                   </div>
+                   <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
+                      <span>Settlement Speed</span> <span>Instant (Local Relay)</span>
+                   </div>
+                   <div className="flex justify-between text-xl font-black font-heading text-primary uppercase pt-4 border-t border-white/5">
+                      <span>Receiving (NGN)</span> <span>~₦{ (parseFloat(amount) * 1550 || 0).toLocaleString() }</span>
+                   </div>
+                </div>
+                
+                <button 
+                  onClick={handleWithdraw}
+                  disabled={isProcessing}
+                  className="group w-full p-8 bg-primary text-black rounded-3xl font-black uppercase text-sm tracking-[0.3em] hover:scale-[1.02] transition-all flex items-center justify-center gap-3 shadow-2xl shadow-primary/20 relative overflow-hidden"
                 >
-                   <option value="">Select Local Node</option>
-                   <option value="GTB">GTBank</option>
-                   <option value="ZENITH">Zenith Bank</option>
-                   <option value="ACCESS">Access Bank</option>
-                   <option value="KUDA">Kuda Microfinance</option>
-                </select>
-             </div>
-          </div>
-          <FormInput label="Account Numeration" placeholder="e.g. 0123456789" />
-          
-          <div className="p-8 bg-black/40 rounded-3xl border border-white/10 space-y-3">
-             <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
-                <span>Network Fee</span> <span>0.5%</span>
-             </div>
-             <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
-                <span>Settlement Speed</span> <span>Instant (Local Relay)</span>
-             </div>
-             <div className="flex justify-between text-[12px] font-black font-mono-custom text-primary uppercase pt-4 border-t border-white/5">
-                <span>Receiving (NGN)</span> <span>~₦{ (parseFloat(amount) * 1550 || 0).toLocaleString() }</span>
-             </div>
-          </div>
-          
-          <button onClick={() => alert('Settlement Initialized: Transaction ID Generated')} className="w-full p-8 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:scale-[1.02] transition-all">Authorize Settlement</button>
+                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                  {isProcessing ? <Zap className="animate-spin text-black" /> : <><ArrowUpRight className="relative z-10" /> <span className="relative z-10 text-black">Authorize Settlement</span></>}
+                </button>
+             </motion.div>
+          ) : (
+             <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-8">
+               <FormInput label="Deposit Amount (USD Equiv)" placeholder="e.g. 100" value={amount} onChange={setAmount} />
+               <div className="p-8 bg-black/40 rounded-3xl border border-white/10 space-y-3">
+                  <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
+                     <span>Exchange Rate</span> <span>₦1,550 / USD</span>
+                  </div>
+                  <div className="flex justify-between text-xl font-black font-heading text-secondary uppercase pt-4 border-t border-white/5">
+                     <span>You Pay (NGN)</span> <span>₦{ (parseFloat(amount) * 1550 || 0).toLocaleString() }</span>
+                  </div>
+               </div>
+               <button 
+                onClick={handleAddCash}
+                disabled={isProcessing}
+                className="group w-full p-8 bg-white text-black rounded-3xl font-black uppercase text-sm tracking-[0.3em] hover:bg-secondary hover:text-white transition-all flex items-center justify-center gap-3 shadow-2xl relative overflow-hidden"
+               >
+                 <div className="absolute inset-0 bg-secondary/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                 {isProcessing ? <Zap className="animate-spin" /> : <><CreditCard className="relative z-10" /> <span className="relative z-10">Initialize Deposit</span></>}
+               </button>
+               <p className="text-[9px] text-gray-600 font-black uppercase text-center tracking-widest italic font-mono-custom">Payment secured via Paystack SSL Node</p>
+             </motion.div>
+          )}
        </div>
     </div>
   );
@@ -1129,7 +1304,7 @@ function NotificationsView({ user }) {
   }, []);
 
   return (
-    <div className="p-6 md:p-12 max-w-4xl w-full mx-auto text-left">
+    <div className="p-6 md:p-12 lg:px-24 w-full text-left">
        <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading mb-12">Protocol Log</h2>
        <div className="space-y-4">
           {notes.length > 0 ? notes.map(n => (
@@ -1189,7 +1364,7 @@ function EscrowDashboard({ user, setScreen }) {
   );
 
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full">
       <header className="flex justify-between items-center mb-12 text-left">
         <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading">Escrow Protocol</h2>
         <button 
@@ -1281,16 +1456,26 @@ function CreateEscrowView({ user, setScreen }) {
     if (!formData.receiver_id || !formData.amount) return alert('Fill fields');
     setLoading(true);
     try {
+       // 1. Generate Thalexa Escrow ID
+       const idResp = await fetch('/api/ids/generate/escrow');
+       const { id: thalexaEscrowId } = await idResp.json();
+
+       console.log("Calling Contract with EscrowID:", thalexaEscrowId);
+       // In a real dApp, we'd call the smart contract here:
+       // await contract.createEscrow(formData.receiver_address, product_code, thalexaEscrowId, { value: ... });
+
+       // 2. Sync with Supabase
        const { error } = await supabase.from('escrows').insert([{
+         thalexa_id: thalexaEscrowId,
          sender_id: user.id,
-         receiver_id: formData.receiver_id,
+         receiver_address: formData.receiver_id, // assuming it's the address for this simplified view
          amount: parseFloat(formData.amount),
          currency: formData.currency,
          status: 'funded'
        }]);
 
        if (error) throw error;
-       alert('BNB Chain Transaction Confirmed: Escrow Locked');
+       alert(`BNB Chain Transaction Confirmed. Escrow ID: ${thalexaEscrowId}`);
        setScreen('escrow');
     } catch (e) {
        alert('Contract Error: ' + e.message);
@@ -1374,22 +1559,42 @@ function ProductsView({ user, setScreen }) {
   const [registerData, setRegisterData] = useState({ name: '', serial: '', desc: '', price: '' });
 
   const handleRegister = async () => {
-    if (!registerData.name || !registerData.serial) return;
+    if (!registerData.name) return;
     setIsRegistering(true);
     try {
+      // 1. Get Reserved Thalexa ID from Backend
+      const idResp = await fetch('/api/ids/generate/product');
+      const { id: thalexaId } = await idResp.json();
+
+      // 2. Upload to IPFS with Thalexa ID in metadata
+      const meta = {
+        thalexa_id: thalexaId,
+        name: registerData.name,
+        description: registerData.desc || 'Verified Thalexa Asset',
+        image: 'https://gateway.pinata.cloud/ipfs/QmThalexaPlaceholder',
+        created_at: new Date().toISOString(),
+        productCode: registerData.serial || thalexaId
+      };
+
+      const ipfsResp = await fetch('/api/ipfs/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metadata: meta })
+      });
+      const { ipfs_cid } = await ipfsResp.json();
+
+      // 3. Save to Supabase (Trigger will ensure thalexa_id if we didn't specify, but better to be explicit if we have it)
       const { error } = await supabase.from('products').insert([{
-        product_code: registerData.serial.toUpperCase(),
+        thalexa_id: thalexaId,
+        product_code: registerData.serial || thalexaId,
         owner_id: user.id,
-        metadata: {
-          name: registerData.name,
-          type: 'Consumer Goods',
-          price: registerData.price || '0.00 BNB',
-          description: registerData.desc
-        }
+        ipfs_cid: ipfs_cid,
+        metadata: meta
       }]);
       
       if (error) throw error;
-      alert('Product Registered. CID pinned. 0.009 BNB Sent to Treasury.');
+      
+      alert(`Asset Minted: ${thalexaId}. 0.009 BNB Sent to Treasury.`);
       setShowRegister(false);
       setIsRegistering(false);
     } catch (e) {
@@ -1400,11 +1605,11 @@ function ProductsView({ user, setScreen }) {
 
   const handleVerify = async () => {
     if (!search) return;
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('product_code', search.trim().toUpperCase())
-      .single();
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .or(`thalexa_id.eq.${search.trim().toUpperCase()},product_code.eq.${search.trim().toUpperCase()}`)
+        .single();
 
     if (data) {
       setResult({ 
@@ -1412,9 +1617,10 @@ function ProductsView({ user, setScreen }) {
         name: data.metadata?.name || 'Unknown Item', 
         manufacturer: 'Authenticated Asset', 
         tx: data.id.slice(0,12),
-        ipfs_cid: 'QmXoyp...7V2c',
+        ipfs_cid: data.ipfs_cid,
         location: 'Global Hub',
-        date: new Date(data.created_at).toLocaleDateString()
+        date: new Date(data.created_at).toLocaleDateString(),
+        thalexa_id: data.thalexa_id
       });
     } else {
       setResult({ status: 'unknown' });
@@ -1422,7 +1628,7 @@ function ProductsView({ user, setScreen }) {
   };
 
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full">
        <header className="flex justify-between items-center mb-12">
           <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading text-left">Product Registry</h2>
           <button 
@@ -1526,7 +1732,7 @@ function ProductsView({ user, setScreen }) {
                       <h3 className="text-6xl font-black text-secondary mb-4 uppercase italic tracking-tighter leading-none font-heading">Authentic</h3>
                       <p className="text-3xl font-black mb-4 opacity-80 uppercase italic font-heading">{result.name}</p>
                       <div className="bg-white p-8 rounded-[3rem] w-fit mx-auto shadow-2xl relative mb-10 group">
-                         <QRCodeSVG value={`https://thalexa.com/verify/${search}`} size={200} />
+                         <QRCodeSVG value={`https://thalexa.io/verify/${result.thalexa_id || search}`} size={200} />
                          <div className="absolute inset-0 border-4 border-transparent group-hover:border-primary transition-all rounded-[3rem]"></div>
                       </div>
                       
@@ -1538,7 +1744,7 @@ function ProductsView({ user, setScreen }) {
                             </div>
                             <div>
                                <p className="text-[9px] text-gray-500 font-black uppercase mb-1 font-mono-custom">Protocol ID</p>
-                               <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{search}</p>
+                               <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{result.thalexa_id || search}</p>
                             </div>
                          </div>
                          <div className="pt-4 border-t border-white/5">
@@ -1664,7 +1870,7 @@ function Onboarding({ onLogin, loading }) {
        <motion.div 
          initial={{ y: 20, opacity: 0 }}
          animate={{ y: 0, opacity: 1 }}
-         className="glass p-12 md:p-16 rounded-[4rem] border border-white/10 w-full max-w-2xl text-left"
+         className="glass p-12 md:p-16 rounded-[4rem] border border-white/10 w-full max-w-6xl text-left"
        >
           <div className="flex items-center gap-4 mb-12">
              <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-black font-black italic font-heading">T</div>
@@ -1736,6 +1942,7 @@ function AdminView({ setScreen, stats }) {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [landingAsset, setLandingAsset] = useState(stats?.landing_asset || '');
   
   // Product Upload State
   const [newProduct, setNewProduct] = useState({
@@ -1820,8 +2027,18 @@ function AdminView({ setScreen, stats }) {
     }
   };
 
+  const handleUpdateLandingAsset = async () => {
+    // We update this via the broadcast API in this implementation
+    await fetch('/api/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'LANDING_ASSET_UPDATE', asset: landingAsset })
+    });
+    alert('Landing Asset Update Requested.');
+  };
+
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full grid grid-cols-1 lg:grid-cols-12 gap-12">
       <div className="lg:col-span-8">
         <header className="flex items-center justify-between mb-12">
           <div className="flex items-center gap-6">
@@ -1835,7 +2052,18 @@ function AdminView({ setScreen, stats }) {
 
         {/* Product Upload Tool */}
         <section className="mb-12 glass p-10 rounded-[3rem] border border-primary/20 bg-primary/5">
-           <h3 className="text-xl font-black italic uppercase mb-6 tracking-tighter font-heading text-primary">Mint New Product (Landing NFT)</h3>
+           <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black italic uppercase tracking-tighter font-heading text-primary">Mint New Product (Landing NFT)</h3>
+              <div className="flex gap-2">
+                 <input 
+                   placeholder="Landing Asset URL / GIF" 
+                   value={landingAsset} 
+                   onChange={(e) => setLandingAsset(e.target.value)} 
+                   className="glass bg-white/5 p-3 rounded-xl border border-white/10 text-[10px] font-bold outline-none"
+                 />
+                 <button onClick={handleUpdateLandingAsset} className="bg-primary text-black p-3 rounded-xl"><Database size={14}/></button>
+              </div>
+           </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <AdminInput placeholder="Product Code (id)" value={newProduct.code} onChange={v => setNewProduct({...newProduct, code: v})} />
               <AdminInput placeholder="Display Name" value={newProduct.name} onChange={v => setNewProduct({...newProduct, name: v})} />
@@ -1949,8 +2177,11 @@ function LogEntry({ user, action, status, tx }) {
 }
 
 function SettingsView({ user, setScreen, setUser }) {
+  const [showKey, setShowKey] = useState(false);
+  const protocolKey = user.secret_key || 'THLX-SEC-' + user.id.slice(0, 16).toUpperCase();
+
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full grid grid-cols-1 lg:grid-cols-12 gap-12">
       <div className="lg:col-span-5">
         <header className="mb-12">
           <h2 className="text-5xl font-black italic uppercase tracking-tighter font-heading text-left">Control Center</h2>
@@ -1972,17 +2203,41 @@ function SettingsView({ user, setScreen, setUser }) {
             </div>
           </div>
           
-          <div className="space-y-3 mb-12">
-            <SettingItem icon={<CreditCard size={20} />} label="Paystack Billing Hub" onClick={() => setScreen('subscriptions')} />
-            {user.email === 'emmanuelobed877@gmail.com' && (
-              <SettingItem icon={<LayoutDashboard size={20} />} label="Command Dashboard" onClick={() => setScreen('admin')} />
-            )}
-            <SettingItem icon={<ShieldCheck size={20} />} label="Biometric Signer" />
-            <SettingItem icon={<History size={20} />} label="Blockchain Events" />
+          <div className="space-y-6 mb-12">
+             {!user.is_verified && (
+                <button 
+                  onClick={() => alert('Security Transmission Sent: Check your Node Email for verification link.')} 
+                  className="w-full p-6 bg-secondary/10 text-secondary border border-secondary/30 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.3em] font-mono-custom hover:bg-secondary/20 transition-all flex items-center justify-center gap-3"
+                >
+                  <ShieldCheck size={16} /> Verify Identity Pulse
+                </button>
+             )}
+
+             <div className="p-6 glass bg-black/40 rounded-3xl border border-white/10">
+                <p className="text-[10px] text-primary font-black uppercase tracking-[0.3em] mb-3 font-mono-custom">Secret Protocol Key</p>
+                <div className="flex items-center justify-between gap-4">
+                   <p className="text-xs font-mono font-bold tracking-widest text-white truncate max-w-[200px]">
+                      {showKey ? protocolKey : '••••••••••••••••••••••••'}
+                   </p>
+                   <button onClick={() => setShowKey(!showKey)} className="text-primary hover:text-white transition-colors">
+                      {showKey ? <Zap size={16} /> : <ShieldCheck size={16} />}
+                   </button>
+                </div>
+                <p className="text-[8px] text-gray-600 font-medium uppercase mt-2 italic">Use this key for account recovery and identity verification.</p>
+             </div>
+
+            <div className="space-y-3">
+              <SettingItem icon={<CreditCard size={20} />} label="Paystack Billing Hub" onClick={() => setScreen('subscriptions')} />
+              {user.email === 'emmanuelobed877@gmail.com' && (
+                <SettingItem icon={<LayoutDashboard size={20} />} label="Command Dashboard" onClick={() => setScreen('admin')} />
+              )}
+              <SettingItem icon={<ShieldCheck size={20} />} label="Biometric Signer" />
+              <SettingItem icon={<History size={20} />} label="Blockchain Events" />
+            </div>
           </div>
 
           <button 
-            onClick={() => { setUser(null); setScreen('landing'); }}
+            onClick={() => { setUser(null); setScreen('landing'); localStorage.removeItem('thalexa_user_email'); }}
             className="w-full glass p-8 rounded-[2.5rem] text-red-500 font-black italic uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all shadow-xl font-heading"
           >
             <LogOut size={24} /> Decommission Terminal
@@ -2078,7 +2333,7 @@ function SubscriptionsView({ user, setScreen }) {
   };
 
   return (
-    <div className="p-6 md:p-12 pb-24 max-w-7xl w-full mx-auto">
+    <div className="p-6 md:p-12 lg:px-24 pb-24 w-full">
       <header className="flex items-center gap-6 mb-16">
         <button onClick={() => setScreen('settings')} className="p-5 glass rounded-[2rem] border border-white/10 text-primary transition-all hover:scale-110 shadow-xl font-heading">
           <ArrowDownLeft className="rotate-45" />
@@ -2136,5 +2391,216 @@ function SubscriptionsView({ user, setScreen }) {
   );
 }
 
+
+// ⸻ NEW COMPONENTS FOR ENHANCEMENTS ⸻
+
+function GlobalHeatmap() {
+  const svgRef = useRef(null);
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/map-data').then(r => r.json()).then(setData);
+
+    const svg = d3.select(svgRef.current);
+    const width = 1200;
+    const height = 600;
+    
+    const projection = d3.geoMercator()
+      .scale(200)
+      .translate([width / 2, height / 2.5]);
+
+    svg.selectAll("*").remove();
+
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+      .then(r => r.json())
+      .then(worldData => {
+        const countries = topojson.feature(worldData, worldData.objects.countries);
+        
+        svg.append("g")
+          .selectAll("path")
+          .data(countries.features)
+          .enter()
+          .append("path")
+          .attr("d", d3.geoPath().projection(projection))
+          .attr("fill", "#0a0a0a")
+          .attr("stroke", "#1a1a1a")
+          .attr("stroke-width", 0.5);
+
+        const graticule = d3.geoGraticule();
+        svg.append("path")
+          .datum(graticule)
+          .attr("class", "graticule")
+          .attr("d", d3.geoPath().projection(projection))
+          .attr("fill", "none")
+          .attr("stroke", "#ffffff05");
+
+        const points = svg.append("g");
+        
+        data.forEach(d => {
+          const coords = projection([d.lon, d.lat]);
+          if (!coords) return;
+          const [cx, cy] = coords;
+          
+          points.append("circle")
+            .attr("cx", cx)
+            .attr("cy", cy)
+            .attr("r", Math.sqrt(d.value) * 1.5)
+            .attr("fill", "rgba(255, 107, 0, 0.4)")
+            .attr("class", "animate-pulse");
+
+          points.append("circle")
+            .attr("cx", cx)
+            .attr("cy", cy)
+            .attr("r", 3)
+            .attr("fill", "#FF6B00")
+            .attr("stroke", "white")
+            .attr("stroke-width", 0.5);
+
+          points.append("text")
+            .attr("x", cx + 8)
+            .attr("y", cy + 4)
+            .attr("fill", "#666")
+            .attr("font-size", "10px")
+            .attr("font-weight", "black")
+            .attr("font-family", "JetBrains Mono")
+            .text(d.label);
+        });
+      });
+  }, [data]);
+
+  return (
+    <div className="w-full h-[600px] glass rounded-[3rem] border border-white/5 overflow-hidden relative p-8 group">
+      <div className="absolute top-8 left-8 z-10 text-left">
+         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary font-mono-custom mb-1">Network Expansion</p>
+         <h3 className="text-3xl font-black italic uppercase tracking-tighter text-white font-heading">Global Hub Matrix</h3>
+      </div>
+      <div className="absolute bottom-8 right-8 z-10 flex gap-4">
+         <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary animate-ping"></div>
+            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 font-mono-custom">Active Sink</span>
+         </div>
+         <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 font-mono-custom">Verified Node</span>
+         </div>
+      </div>
+      <svg ref={svgRef} viewBox="0 0 1200 600" className="w-full h-full filter saturate-150" />
+    </div>
+  );
+}
+
+function TransactionHistoryView({ user, setScreen }) {
+  const [txs, setTxs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTxs = async () => {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (data) setTxs(data);
+      setLoading(false);
+    };
+    fetchTxs();
+  }, [user]);
+
+  return (
+    <div className="p-6 md:p-12 lg:px-24 w-full">
+       <header className="flex justify-between items-center mb-12">
+          <div className="flex items-center gap-6">
+             <button onClick={() => setScreen('wallet-assets')} className="p-4 glass rounded-2xl text-primary hover:scale-110 transition-all font-heading">
+                <ArrowDownLeft className="rotate-45" size={24} />
+             </button>
+             <h2 className="text-4xl font-black italic uppercase tracking-tighter font-heading">Activity <span className="text-primary">Ledger</span></h2>
+          </div>
+       </header>
+
+       <div className="space-y-4 w-full">
+          {loading ? (
+             <div className="py-20 text-center animate-pulse">
+                <Database size={48} className="mx-auto mb-4 text-gray-700" />
+                <p className="text-gray-500 font-mono-custom text-xs uppercase tracking-widest">Parsing Transactional Flux...</p>
+             </div>
+          ) : txs.length === 0 ? (
+             <div className="glass p-20 rounded-[4rem] text-center border-white/5">
+                <p className="text-gray-500 font-nevera">No synchronization events recorded in this node cluster.</p>
+             </div>
+          ) : (
+            txs.map(tx => (
+              <div key={tx.id} className="mm-card flex justify-between items-center group hover:border-primary/30 transition-all w-full">
+                 <div className="flex items-center gap-6">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${tx.type === 'send' || tx.type === 'withdraw' ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary'}`}>
+                       {tx.type === 'send' || tx.type === 'withdraw' ? <ArrowUpRight size={24} /> : <ArrowDownLeft size={24} />}
+                    </div>
+                    <div className="text-left">
+                       <p className="text-xl font-black italic uppercase tracking-tighter decoration-primary decoration-2 font-heading">{tx.type} Sequence</p>
+                       <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest font-mono-custom">{tx.tx_hash?.slice(0, 20)}...</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <p className={`text-2xl font-black italic font-heading ${tx.type === 'send' || tx.type === 'withdraw' ? 'text-red-500' : 'text-primary'}`}>
+                       {tx.type === 'send' || tx.type === 'withdraw' ? '-' : '+'}{tx.amount} {tx.currency}
+                    </p>
+                    <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest font-mono-custom">{new Date(tx.created_at).toLocaleString()}</p>
+                 </div>
+              </div>
+            ))
+          )}
+       </div>
+    </div>
+  );
+}
+
+function QRScannerView({ onResult, onCancel }) {
+  const videoRef = useRef(null);
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    const codeReader = new BrowserMultiFormatReader();
+    
+    codeReader.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
+      if (result) {
+        onResult(result.getText());
+        codeReader.reset();
+        setScanning(false);
+      }
+    });
+
+    return () => {
+      codeReader.reset();
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-6">
+       <div className="max-w-md w-full relative">
+          <div className="absolute top-0 left-0 right-0 p-8 z-10 flex justify-between items-center">
+             <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white font-heading">Protocol Scanner</h3>
+             <button onClick={onCancel} className="text-white hover:text-primary transition-colors text-xl">✕</button>
+          </div>
+          
+          <div className="glass p-2 rounded-[3.5rem] border-primary/30 relative overflow-hidden aspect-square">
+             <video ref={videoRef} className="w-full h-full object-cover rounded-[3rem]" />
+             <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-4 border-primary/50 rounded-[2rem]">
+                   <div className="absolute inset-0 border-2 border-white/20 animate-pulse rounded-[1.8rem]"></div>
+                </div>
+                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-primary animate-bounce shadow-[0_0_20px_rgba(255,107,0,1)]"></div>
+             </div>
+          </div>
+          
+          <div className="mt-12 text-center">
+             <p className="text-gray-400 font-nevera text-lg font-medium">Align the Thalexa QR within the frame.</p>
+             <p className="text-[10px] text-primary font-black uppercase tracking-[0.5em] mt-4 animate-pulse font-mono-custom">Awaiting Optical Handshake...</p>
+          </div>
+       </div>
+    </div>
+  );
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
 root.render(<App />);

@@ -29,9 +29,55 @@ class WalletScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _buildAssetList(),
+            const Text(
+              'Recent Activity',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            _buildTransactionList(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTransactionList() {
+    final transactions = [
+      {'type': 'Received', 'amount': '+0.5 BNB', 'date': 'Today, 2:45 PM', 'icon': Icons.arrow_downward, 'color': Colors.green},
+      {'type': 'Sent', 'amount': '-120 USDT', 'date': 'Yesterday, 10:20 AM', 'icon': Icons.arrow_upward, 'color': Colors.red},
+      {'type': 'Minted', 'amount': 'ID: THLX-002', 'date': 'Oct 24, 2023', 'icon': Icons.auto_awesome, 'color': Colors.orange},
+    ];
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: transactions.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final tx = transactions[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          tileColor: Colors.white.withOpacity(0.05),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (tx['color'] as Color).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(tx['icon'] as IconData, color: tx['color'] as Color, size: 20),
+          ),
+          title: Text(tx['type'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          subtitle: Text(tx['date'] as String, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          trailing: Text(
+            tx['amount'] as String,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: (tx['amount'] as String).startsWith('+') ? Colors.green : Colors.white,
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -13,6 +13,7 @@ contract ThalexaEscrow {
         address receiver;
         uint256 amount;
         string productId;
+        string escrowId; // Thalexa ID: THLX-ESC-XXXXXX
         Status status;
         uint256 createdAt;
     }
@@ -20,11 +21,11 @@ contract ThalexaEscrow {
     mapping(uint256 => Escrow) public escrows;
     uint256 public escrowCount;
 
-    event EscrowCreated(uint256 id, address sender, address receiver, uint256 amount);
-    event FundsReleased(uint256 id);
-    event FundsRefunded(uint256 id);
+    event EscrowCreated(uint256 id, string escrowId, address sender, address receiver, uint256 amount);
+    event FundsReleased(uint256 id, string escrowId);
+    event FundsRefunded(uint256 id, string escrowId);
 
-    function createEscrow(address _receiver, string memory _productId) public payable returns (uint256) {
+    function createEscrow(address _receiver, string memory _productId, string memory _escrowId) public payable returns (uint256) {
         require(msg.value > 0, "Amount must be greater than 0");
         
         uint256 id = escrowCount++;
@@ -33,11 +34,12 @@ contract ThalexaEscrow {
             receiver: _receiver,
             amount: msg.value,
             productId: _productId,
+            escrowId: _escrowId,
             status: Status.FUNDED,
             createdAt: block.timestamp
         });
 
-        emit EscrowCreated(id, msg.sender, _receiver, msg.value);
+        emit EscrowCreated(id, _escrowId, msg.sender, _receiver, msg.value);
         return id;
     }
 
@@ -49,7 +51,7 @@ contract ThalexaEscrow {
         e.status = Status.RELEASED;
         payable(e.receiver).transfer(e.amount);
 
-        emit FundsReleased(_id);
+        emit FundsReleased(_id, e.escrowId);
     }
 
     function refundFunds(uint256 _id) public {
@@ -61,6 +63,6 @@ contract ThalexaEscrow {
         e.status = Status.REFUNDED;
         payable(e.sender).transfer(e.amount);
 
-        emit FundsRefunded(_id);
+        emit FundsRefunded(_id, e.escrowId);
     }
 }

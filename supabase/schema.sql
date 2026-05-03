@@ -72,12 +72,12 @@ DECLARE
   wallet_suffix TEXT;
   random_part TEXT;
 BEGIN
-  IF NEW.wallet_address IS NOT NULL THEN
-    wallet_suffix := UPPER(SUBSTRING(NEW.wallet_address FROM (LENGTH(NEW.wallet_address)-5)));
+  IF NEW.wallet_address IS NOT NULL AND NEW.wallet_address != '' THEN
+    wallet_suffix := UPPER(SUBSTRING(NEW.wallet_address FROM (LENGTH(NEW.wallet_address)-2)));
   ELSE
-    wallet_suffix := '000000';
+    wallet_suffix := '000';
   END IF;
-  random_part := UPPER(SUBSTRING(md5(random()::text) FROM 1 FOR 4));
+  random_part := UPPER(SUBSTRING(md5(random()::text) FROM 1 FOR 3));
   NEW.thalexa_id := 'THLX-USER-' || wallet_suffix || random_part;
   RETURN NEW;
 END;

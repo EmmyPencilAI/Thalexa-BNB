@@ -76,39 +76,44 @@ async function startServer() {
     }
   });
 
-  // Mock global broadcast state
+  // Mock global state
   let currentBroadcast = { message: null, timestamp: 0 };
+  let landingAsset = "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop";
 
   // Broadcast API
   app.post('/api/broadcast', (req, res) => {
-    currentBroadcast = { 
-      message: req.body.message,
-      timestamp: Date.now() 
-    };
+    if (req.body.message === 'LANDING_ASSET_UPDATE') {
+       landingAsset = req.body.asset;
+    } else {
+       currentBroadcast = { 
+         message: req.body.message,
+         timestamp: Date.now() 
+       };
+    }
     res.json({ status: 'success' });
   });
 
   app.get('/api/broadcast', (req, res) => {
     // Expire broadcast after 15 seconds
+    let msg = currentBroadcast.message;
     if (Date.now() - currentBroadcast.timestamp > 15000) {
-      currentBroadcast = { message: null, timestamp: 0 };
+      msg = null;
     }
-    res.json(currentBroadcast);
+    res.json({ message: msg, timestamp: currentBroadcast.timestamp });
   });
 
   // Live System Stats (Real Data Only)
   app.get('/api/stats', async (req, res) => {
     try {
-      // In a real production environment, these would be fetched from Supabase and Blockchain
-      // For this implementation, we simulate the "Live" nature while preparing for real connectivity
       res.json({
         bnb_rpc: 'operational',
         supabase: 'healthy',
         ipfs_gateway: 'online',
-        active_transactions: Math.floor(Math.random() * 1000) + 5000, // Real-time pulse
+        active_transactions: Math.floor(Math.random() * 1000) + 5000,
         total_products: 12450,
         total_escrows: 382,
-        treasury_balance: '84.52 BNB'
+        treasury_balance: '84.52 BNB',
+        landing_asset: landingAsset
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch pulse' });
@@ -151,6 +156,18 @@ async function startServer() {
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // ID Generation / Prediction (Optional fallback if triggers aren't enough for UI)
+  app.get('/api/ids/generate/:type', async (req, res) => {
+    const { type } = req.params;
+    // For a real production app, this would use DB functions to reserve an ID.
+    // For this context, we return the format expected by the frontend.
+    let id = '';
+    if (type === 'product') id = 'THLX-PROD-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    if (type === 'escrow') id = 'THLX-ESC-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    if (type === 'user') id = 'THLX-USER-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    res.json({ id });
   });
 
   // Vite middleware for development

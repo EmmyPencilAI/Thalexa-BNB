@@ -1,6 +1,6 @@
 {
-  "name": "Thalexa",
-  "description": "Multi-platform Web3 verification, escrow, and wallet dApp powered by Sui blockchain.",
+  "name": "Thalexa Protocol",
+  "description": "High-fidelity Web3 verification, escrow, and liquid settlement protocol powered by BNB Chain.",
   "requestFramePermissions": [
     "camera",
     "geolocation"
