@@ -74,6 +74,42 @@ async function startServer() {
     }
   });
 
+  // Paystack: Get Banks
+  app.get('/api/paystack/banks', async (req, res) => {
+    try {
+      const paystack = getPaystack();
+      const response = await new Promise((resolve, reject) => {
+        paystack.misc.list_banks((error: any, body: any) => {
+          if (error) reject(error);
+          else resolve(body);
+        });
+      });
+      res.json(response);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Paystack: Resolve Account Number
+  app.get('/api/paystack/resolve-account', async (req, res) => {
+    try {
+      const { account_number, bank_code } = req.query;
+      const paystack = getPaystack();
+      const response = await new Promise((resolve, reject) => {
+        paystack.verification.resolveAccount({
+          account_number,
+          bank_code
+        }, (error: any, body: any) => {
+          if (error) reject(error);
+          else resolve(body);
+        });
+      });
+      res.json(response);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Global ID Generation (Fallback API)
   app.get('/api/ids/generate/user', (req, res) => {
     const id = 'THLX-USER-' + Math.random().toString(36).substring(2, 8).toUpperCase();

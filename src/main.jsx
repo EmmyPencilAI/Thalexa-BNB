@@ -106,6 +106,7 @@ function App() {
        if (data) {
          setUser(data);
          localStorage.setItem('thalexa_user_email', email);
+         localStorage.setItem('thalexa_user_wallet_phrase', loginData.phrase || '');
          setScreen('home');
        } else {
           // Auto-create profile if not exists
@@ -120,14 +121,13 @@ function App() {
             thalexId = 'THLX-USER-' + Math.random().toString(36).substring(2, 8).toUpperCase();
           }
 
-          const wallet = '0x' + Math.random().toString(16).slice(2, 42);
           const newUser = {
             id: thalexId,
             thalexa_id: thalexId,
             email: email,
             username: loginData.username || 'user_' + Math.random().toString(36).slice(2, 7),
             country: loginData.country || 'Global',
-            wallet_address: wallet,
+            wallet_address: loginData.wallet_address || '0x' + Math.random().toString(16).slice(2, 42),
             role: 'admin',
             plan: 'professional',
             is_verified: false
@@ -139,6 +139,9 @@ function App() {
           if (createdUser) {
             setUser(createdUser);
             localStorage.setItem('thalexa_user_email', email);
+            if (loginData.phrase) {
+              localStorage.setItem('thalexa_user_wallet_phrase', loginData.phrase);
+            }
             setScreen('home');
           } else {
             throw new Error('Failed to synchronize identity node.');
@@ -1201,8 +1204,49 @@ function PayView({ user, setScreen }) {
   const [activeTab, setActiveTab] = useState('withdraw'); // 'withdraw' | 'deposit'
   const [amount, setAmount] = useState('');
   const [bank, setBank] = useState('');
+  const [banks, setBanks] = useState([]);
   const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/paystack/banks')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status && data.data) {
+          setBanks(data.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch banks:', err));
+  }, []);
+
+  useEffect(() => {
+    const verifyAccount = async () => {
+      if (accountNumber.length === 10 && bank) {
+        setIsVerifying(true);
+        setAccountName('Verifying...');
+        try {
+          const resp = await fetch(`/api/paystack/resolve-account?account_number=${accountNumber}&bank_code=${bank}`);
+          const data = await resp.json();
+          if (data.status && data.data) {
+            setAccountName(data.data.account_name);
+          } else {
+            setAccountName('Account Not Found');
+          }
+        } catch (err) {
+          setAccountName('Verification Failed');
+        } finally {
+          setIsVerifying(false);
+        }
+      } else {
+        setAccountName('');
+      }
+    };
+
+    const timer = setTimeout(verifyAccount, 500);
+    return () => clearTimeout(timer);
+  }, [accountNumber, bank]);
 
   const handleWithdraw = async () => {
     if (!amount || !bank || !accountNumber) return alert('Please fill all details');
@@ -1283,19 +1327,37 @@ function PayView({ user, setScreen }) {
                       <select 
                         value={bank}
                         onChange={(e) => setBank(e.target.value)}
-                        className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white"
+                        className="w-full glass bg-white/5 p-6 rounded-3xl outline-none border border-white/10 font-black text-xs uppercase text-white h-full"
                       >
                          <option value="" className="bg-black">Select Local Node</option>
-                         <option value="GTB" className="bg-black">GTBank</option>
-                         <option value="ZENITH" className="bg-black">Zenith Bank</option>
-                         <option value="ACCESS" className="bg-black">Access Bank</option>
-                         <option value="KUDA" className="bg-black">Kuda Microfinance</option>
-                         <option value="OPAY" className="bg-black">OPay Node</option>
-                         <option value="PALMPAY" className="bg-black">PalmPay Node</option>
+                         {banks.length > 0 ? (
+                            banks.map(b => (
+                              <option key={b.code} value={b.code} className="bg-black">{b.name}</option>
+                            ))
+                         ) : (
+                            <>
+                              <option value="058" className="bg-black">GTBank</option>
+                              <option value="057" className="bg-black">Zenith Bank</option>
+                              <option value="044" className="bg-black">Access Bank</option>
+                            </>
+                         )}
                       </select>
                    </div>
                 </div>
-                <FormInput label="Account Numeration (Account Number)" placeholder="e.g. 0123456789" value={accountNumber} onChange={setAccountNumber} />
+                
+                <div className="relative">
+                   <FormInput label="Account Numeration (Account Number)" placeholder="e.g. 0123456789" value={accountNumber} onChange={setAccountNumber} />
+                   {accountName && (
+                     <motion.p 
+                       initial={{ opacity: 0, y: -10 }} 
+                       animate={{ opacity: 1, y: 0 }} 
+                       className={`absolute -bottom-6 left-6 text-[10px] font-black uppercase italic ${accountName === 'Account Not Found' ? 'text-red-500' : 'text-primary'}`}
+                     >
+                       {isVerifying && <Zap size={8} className="inline mr-1 animate-spin" />}
+                       {accountName}
+                     </motion.p>
+                   )}
+                </div>
                 
                 <div className="p-8 bg-black/40 rounded-3xl border border-white/10 space-y-3">
                    <div className="flex justify-between text-[10px] font-black font-mono-custom text-gray-500 uppercase">
@@ -1614,6 +1676,8 @@ function ProductsView({ user, setScreen }) {
   const [result, setResult] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchSuccess, setSearchSuccess] = useState(false);
   const [registerData, setRegisterData] = useState({ name: '', serial: '', desc: '', price: '' });
 
   const handleRegister = async () => {
@@ -1671,25 +1735,33 @@ function ProductsView({ user, setScreen }) {
 
   const handleVerify = async () => {
     if (!search) return;
+    setIsSearching(true);
+    setSearchSuccess(false);
+    try {
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .or(`thalexa_id.eq.${search.trim().toUpperCase()},product_code.eq.${search.trim().toUpperCase()}`)
         .single();
 
-    if (data) {
-      setResult({ 
-        status: 'authentic', 
-        name: data.metadata?.name || 'Unknown Item', 
-        manufacturer: 'Authenticated Asset', 
-        tx: data.id.slice(0,12),
-        ipfs_cid: data.ipfs_cid,
-        location: 'Global Hub',
-        date: new Date(data.created_at).toLocaleDateString(),
-        thalexa_id: data.thalexa_id
-      });
-    } else {
-      setResult({ status: 'unknown' });
+      if (data) {
+        setSearchSuccess(true);
+        setResult({ 
+          status: 'authentic', 
+          name: data.metadata?.name || 'Unknown Item', 
+          manufacturer: 'Authenticated Asset', 
+          tx: data.id.slice(0,12),
+          ipfs_cid: data.ipfs_cid,
+          location: 'Global Hub',
+          date: new Date(data.created_at).toLocaleDateString(),
+          thalexa_id: data.thalexa_id
+        });
+        setTimeout(() => setSearchSuccess(false), 3000);
+      } else {
+        setResult({ status: 'unknown' });
+      }
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -1753,10 +1825,19 @@ function ProductsView({ user, setScreen }) {
                     />
                     <button 
                       onClick={handleVerify}
-                      className="absolute right-5 top-5 bg-primary text-black p-6 rounded-3xl hover:scale-105 transition-transform shadow-xl"
+                      className="absolute right-5 top-5 bg-primary text-black p-6 rounded-3xl hover:scale-105 transition-transform shadow-xl flex items-center justify-center min-w-[80px]"
                     >
-                      <Search size={32} />
+                      {isSearching ? <Zap className="animate-spin" size={32} /> : <Search size={32} />}
                     </button>
+                    {searchSuccess && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute -top-12 left-1/2 -translate-x-1/2 bg-primary text-black px-6 py-2 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-2 z-50"
+                      >
+                        <CheckCircle2 size={14} /> Product Identity Verified
+                      </motion.div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 opacity-40">
@@ -1925,8 +2006,21 @@ function UsageProgress({ label, current, max, prefix = "" }) {
 }
 
 function Onboarding({ onLogin, loading }) {
-  const [step, setStep] = useState(0); // 0: Welcome, 1: Details, 2: Finalize
-  const [data, setData] = useState({ email: 'emmanuelobed877@gmail.com', username: '', country: 'Nigeria', accepted: false });
+  const [step, setStep] = useState(0); // 0: Welcome, 1: Details, 2: Wallet Gen, 3: Secret Phrase, 4: Finalize
+  const [data, setData] = useState({ email: 'emmanuelobed877@gmail.com', username: '', country: 'Nigeria', accepted: false, wallet_address: '', phrase: '' });
+
+  const generateWallet = () => {
+    try {
+      const wallet = ethers.Wallet.createRandom();
+      setData({ ...data, wallet_address: wallet.address, phrase: wallet.mnemonic.phrase });
+      setStep(2);
+    } catch (err) {
+      console.error('Wallet generation failed:', err);
+      // Fallback
+      setData({ ...data, wallet_address: '0x' + Math.random().toString(16).slice(2, 42), phrase: 'phrase generation error fallback' });
+      setStep(2);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-6 relative bg-[#050505] overflow-hidden text-white font-sans">
@@ -1944,7 +2038,7 @@ function Onboarding({ onLogin, loading }) {
                 <Zap size={80} className="text-primary fill-primary relative animate-bounce" />
              </div>
              <h1 className="text-5xl font-black tracking-tighter mb-4 text-white font-heading">Welcome to Thalexa</h1>
-             <p className="text-gray-400 text-xl font-medium font-nevera">The world's leading protocol for physical asset tokenization and verification.</p>
+             <p className="text-gray-400 text-xl font-medium font-nevera">{step < 2 ? "The world's leading protocol for physical asset tokenization." : "Initializing secure on-chain identity hardware."}</p>
           </div>
       
           <AnimatePresence mode="wait">
@@ -2001,11 +2095,11 @@ function Onboarding({ onLogin, loading }) {
                          </div>
                       </div>
                       <button 
-                        onClick={() => setStep(2)} 
+                        onClick={generateWallet} 
                         disabled={!data.username} 
                         className="w-full p-8 bg-primary text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-orange-600 transition-all shadow-xl shadow-primary/20 disabled:opacity-30"
                       >
-                         Continue
+                         Initialize Identity Node
                       </button>
                    </div>
                    <button onClick={() => setStep(0)} className="mt-8 text-gray-400 font-black uppercase text-[10px] tracking-widest font-mono-custom hover:text-primary transition-colors">← Back to start</button>
@@ -2013,6 +2107,65 @@ function Onboarding({ onLogin, loading }) {
              )}
 
              {step === 2 && (
+                <motion.div key="wallet" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                   <div className="bg-[#0a0a0a] p-12 rounded-[3rem] border border-primary/30 shadow-2xl text-left relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Wallet size={120} className="text-primary" />
+                      </div>
+                      <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-2 text-white">BNB <span className="text-primary">Identity Node</span></h2>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-8 font-mono-custom italic">Hardware Wallet Address Bound to Protocol</p>
+                      
+                      <div className="p-6 bg-primary/5 border border-primary/20 rounded-3xl mb-8 break-all">
+                        <p className="text-xs font-mono text-primary font-bold">{data.wallet_address}</p>
+                      </div>
+
+                      <div className="space-y-4 mb-10">
+                        <div className="flex items-center gap-3 text-red-400">
+                          <AlertCircle size={14} />
+                          <p className="text-[8px] font-black uppercase tracking-widest font-mono-custom">Secret Phase incoming. Keep it offline.</p>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => setStep(3)} 
+                        className="w-full p-8 bg-primary text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-white transition-all shadow-xl shadow-primary/20"
+                      >
+                         Reveal Secret Recovery Phase
+                      </button>
+                   </div>
+                </motion.div>
+             )}
+
+             {step === 3 && (
+                <motion.div key="phrase" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+                   <div className="bg-[#0a0a0a] p-12 rounded-[3rem] border border-red-500/30 shadow-2xl text-left relative overflow-hidden">
+                      <h2 className="text-2xl font-black italic uppercase tracking-tighter font-heading mb-2 text-white">Secret <span className="text-red-500">Recovery Phrase</span></h2>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-8 font-mono-custom italic">Write these 12 words down in order. Never share them.</p>
+                      
+                      <div className="grid grid-cols-3 gap-3 mb-10">
+                        {data.phrase.split(' ').map((word, i) => (
+                          <div key={i} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-2">
+                            <span className="text-[8px] text-gray-600 font-mono">{i + 1}</span>
+                            <span className="text-xs font-black italic text-white uppercase">{word}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl mb-10">
+                        <p className="text-[9px] text-red-500 font-bold uppercase italic leading-relaxed">Warning: Without this phrase, your assets are unrecoverable. Thalexa staff will NEVER ask for this.</p>
+                      </div>
+
+                      <button 
+                        onClick={() => setStep(4)} 
+                        className="w-full p-8 bg-white text-black rounded-3xl font-black uppercase text-xs tracking-[0.3em] hover:bg-primary transition-all shadow-xl"
+                      >
+                         I've Secured My Recovery Phrase
+                      </button>
+                   </div>
+                </motion.div>
+             )}
+
+             {step === 4 && (
                 <motion.div key="finalize" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
                    <div className="bg-[#0a0a0a] p-12 rounded-[3rem] border border-white/10 shadow-2xl text-left">
                       <h2 className="text-3xl font-black italic uppercase tracking-tighter font-heading mb-6 text-white text-center">Security <span className="text-secondary">Bind</span></h2>
